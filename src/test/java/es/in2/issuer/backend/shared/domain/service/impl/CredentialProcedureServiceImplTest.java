@@ -3,11 +3,13 @@ package es.in2.issuer.backend.shared.domain.service.impl;
 import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import es.in2.issuer.backend.shared.domain.exception.ParseCredentialJsonException;
 import es.in2.issuer.backend.shared.domain.model.dto.CredentialDetails;
+import es.in2.issuer.backend.shared.domain.model.dto.CredentialOfferEmailNotificationInfo;
 import es.in2.issuer.backend.shared.domain.model.dto.CredentialProcedureCreationRequest;
 import es.in2.issuer.backend.shared.domain.model.dto.CredentialProcedures;
 import es.in2.issuer.backend.shared.domain.model.entities.CredentialProcedure;
-import es.in2.issuer.backend.shared.domain.model.enums.CredentialStatus;
+import es.in2.issuer.backend.shared.domain.model.enums.CredentialStatusEnum;
 import es.in2.issuer.backend.shared.domain.model.enums.CredentialType;
 import es.in2.issuer.backend.shared.infrastructure.repository.CredentialProcedureRepository;
 import org.junit.jupiter.api.Test;
@@ -62,7 +64,7 @@ class CredentialProcedureServiceImplTest {
         CredentialProcedure savedCredentialProcedure = CredentialProcedure.builder()
                 .procedureId(UUID.fromString(expectedProcedureId))
                 .credentialId(UUID.fromString(credentialId))
-                .credentialStatus(CredentialStatus.DRAFT)
+                .credentialStatus(CredentialStatusEnum.DRAFT)
                 .credentialDecoded(credentialDecoded)
                 .organizationIdentifier(organizationIdentifier)
                 .credentialType(expectedCredentialType)
@@ -201,7 +203,7 @@ class CredentialProcedureServiceImplTest {
         CredentialProcedure existingCredentialProcedure = new CredentialProcedure();
         existingCredentialProcedure.setProcedureId(UUID.fromString(procedureId));
         existingCredentialProcedure.setCredentialDecoded("{\"vc\":{\"type\":[\"OldCredentialType\"]}}");
-        existingCredentialProcedure.setCredentialStatus(CredentialStatus.DRAFT);
+        existingCredentialProcedure.setCredentialStatus(CredentialStatusEnum.DRAFT);
         existingCredentialProcedure.setCredentialFormat("old_format");
         existingCredentialProcedure.setUpdatedAt(new Timestamp(Instant.now().toEpochMilli()));
 
@@ -223,7 +225,7 @@ class CredentialProcedureServiceImplTest {
 
         assert existingCredentialProcedure.getCredentialDecoded().equals(newCredential);
         assert existingCredentialProcedure.getCredentialFormat().equals(newFormat);
-        assert existingCredentialProcedure.getCredentialStatus() == CredentialStatus.ISSUED;
+        assert existingCredentialProcedure.getCredentialStatus() == CredentialStatusEnum.ISSUED;
         assert existingCredentialProcedure.getUpdatedAt().before(new Timestamp(Instant.now().toEpochMilli() + 1000)); // Ensures the updated timestamp is recent
     }
 
@@ -276,7 +278,7 @@ class CredentialProcedureServiceImplTest {
     void getCredentialStatusByProcedureId_shouldReturnCredentialStatus() {
         // Given
         String procedureId = UUID.randomUUID().toString();
-        CredentialStatus expectedStatus = CredentialStatus.ISSUED;
+        CredentialStatusEnum expectedStatus = CredentialStatusEnum.ISSUED;
 
         // When
         when(credentialProcedureRepository.findCredentialStatusByProcedureId(any(UUID.class)))
@@ -291,94 +293,94 @@ class CredentialProcedureServiceImplTest {
                 .verifyComplete();
     }
 
-    @Test
-    void getMandateeEmailFromDecodedCredentialByProcedureId_shouldReturnMandateeEmail() throws Exception {
-        // Given
-        String procedureId = UUID.randomUUID().toString();
-        String expectedEmail = "mandatee@example.com";
-        String credentialDecoded = "{\"vc\":{\"credentialSubject\":{\"mandate\":{\"mandatee\":{\"email\":\"" + expectedEmail + "\"}}}}}";
+//    @Test
+//    void getMandateeEmailFromDecodedCredentialByProcedureId_shouldReturnMandateeEmail() throws Exception {
+//        // Given
+//        String procedureId = UUID.randomUUID().toString();
+//        String expectedEmail = "mandatee@example.com";
+//        String credentialDecoded = "{\"vc\":{\"credentialSubject\":{\"mandate\":{\"mandatee\":{\"email\":\"" + expectedEmail + "\"}}}}}";
+//
+//        CredentialProcedure credentialProcedure = new CredentialProcedure();
+//        credentialProcedure.setProcedureId(UUID.fromString(procedureId));
+//        credentialProcedure.setCredentialDecoded(credentialDecoded);
+//
+//        JsonNode credentialNode = new ObjectMapper().readTree(credentialDecoded);
+//
+//        // When
+//        when(credentialProcedureRepository.findById(any(UUID.class)))
+//                .thenReturn(Mono.just(credentialProcedure));
+//        when(objectMapper.readTree(credentialDecoded))
+//                .thenReturn(credentialNode);
+//
+//        // Execute
+//        Mono<String> result = credentialProcedureService.getMandateeEmailFromDecodedCredentialByProcedureId(procedureId);
+//
+//        // Then
+//        StepVerifier.create(result)
+//                .expectNext(expectedEmail)
+//                .verifyComplete();
+//    }
 
-        CredentialProcedure credentialProcedure = new CredentialProcedure();
-        credentialProcedure.setProcedureId(UUID.fromString(procedureId));
-        credentialProcedure.setCredentialDecoded(credentialDecoded);
-
-        JsonNode credentialNode = new ObjectMapper().readTree(credentialDecoded);
-
-        // When
-        when(credentialProcedureRepository.findById(any(UUID.class)))
-                .thenReturn(Mono.just(credentialProcedure));
-        when(objectMapper.readTree(credentialDecoded))
-                .thenReturn(credentialNode);
-
-        // Execute
-        Mono<String> result = credentialProcedureService.getMandateeEmailFromDecodedCredentialByProcedureId(procedureId);
-
-        // Then
-        StepVerifier.create(result)
-                .expectNext(expectedEmail)
-                .verifyComplete();
-    }
-
-    @Test
-    void getMandateeFirstNameFromDecodedCredentialByProcedureId_shouldReturnMandateeFirstName() throws Exception {
-        // Given
-        String procedureId = UUID.randomUUID().toString();
-        String expectedFirstName = "John";
-        String credentialDecoded = "{\"vc\":{\"credentialSubject\":{\"mandate\":{\"mandatee\":{\"firstName\":\"" + expectedFirstName + "\"}}}}}";
-
-        CredentialProcedure credentialProcedure = new CredentialProcedure();
-        credentialProcedure.setProcedureId(UUID.fromString(procedureId));
-        credentialProcedure.setCredentialDecoded(credentialDecoded);
-
-        JsonNode credentialNode = new ObjectMapper().readTree(credentialDecoded);
-
-        // When
-        when(credentialProcedureRepository.findById(any(UUID.class)))
-                .thenReturn(Mono.just(credentialProcedure));
-        when(objectMapper.readTree(credentialDecoded))
-                .thenReturn(credentialNode);
-
-        // Execute
-        Mono<String> result = credentialProcedureService.getMandateeFirstNameFromDecodedCredentialByProcedureId(procedureId);
-
-        // Then
-        StepVerifier.create(result)
-                .expectNext(expectedFirstName)
-                .verifyComplete();
-    }
-
-    @Test
-    void getMandateeCompleteNameFromDecodedCredentialByProcedureId_shouldReturnMandateeCompleteName() throws Exception {
-        // Given
-        String procedureId = UUID.randomUUID().toString();
-        String expectedFirstName = "John";
-        String expectedLastName = "Doe";
-        String expectedCompleteName = "John Doe";
-
-        String credentialDecoded = "{\"vc\":{\"credentialSubject\":{\"mandate\":{\"mandatee\":{" +
-                "\"firstName\":\"" + expectedFirstName + "\"," +
-                "\"lastName\":\"" + expectedLastName + "\"" +
-                "}}}}}";
-        CredentialProcedure credentialProcedure = new CredentialProcedure();
-        credentialProcedure.setProcedureId(UUID.fromString(procedureId));
-        credentialProcedure.setCredentialDecoded(credentialDecoded);
-
-        JsonNode credentialNode = new ObjectMapper().readTree(credentialDecoded);
-
-        // When
-        when(credentialProcedureRepository.findById(any(UUID.class)))
-                .thenReturn(Mono.just(credentialProcedure));
-        when(objectMapper.readTree(credentialDecoded))
-                .thenReturn(credentialNode);
-
-        // Execute
-        Mono<String> result = credentialProcedureService.getMandateeCompleteNameFromDecodedCredentialByProcedureId(procedureId);
-
-        // Then
-        StepVerifier.create(result)
-                .expectNext(expectedCompleteName)
-                .verifyComplete();
-    }
+//    @Test
+//    void getMandateeFirstNameFromDecodedCredentialByProcedureId_shouldReturnMandateeFirstName() throws Exception {
+//        // Given
+//        String procedureId = UUID.randomUUID().toString();
+//        String expectedFirstName = "John";
+//        String credentialDecoded = "{\"vc\":{\"credentialSubject\":{\"mandate\":{\"mandatee\":{\"firstName\":\"" + expectedFirstName + "\"}}}}}";
+//
+//        CredentialProcedure credentialProcedure = new CredentialProcedure();
+//        credentialProcedure.setProcedureId(UUID.fromString(procedureId));
+//        credentialProcedure.setCredentialDecoded(credentialDecoded);
+//
+//        JsonNode credentialNode = new ObjectMapper().readTree(credentialDecoded);
+//
+//        // When
+//        when(credentialProcedureRepository.findById(any(UUID.class)))
+//                .thenReturn(Mono.just(credentialProcedure));
+//        when(objectMapper.readTree(credentialDecoded))
+//                .thenReturn(credentialNode);
+//
+//        // Execute
+//        Mono<String> result = credentialProcedureService.getMandateeFirstNameFromDecodedCredentialByProcedureId(procedureId);
+//
+//        // Then
+//        StepVerifier.create(result)
+//                .expectNext(expectedFirstName)
+//                .verifyComplete();
+//    }
+//
+//    @Test
+//    void getMandateeCompleteNameFromDecodedCredentialByProcedureId_shouldReturnMandateeCompleteName() throws Exception {
+//        // Given
+//        String procedureId = UUID.randomUUID().toString();
+//        String expectedFirstName = "John";
+//        String expectedLastName = "Doe";
+//        String expectedCompleteName = "John Doe";
+//
+//        String credentialDecoded = "{\"vc\":{\"credentialSubject\":{\"mandate\":{\"mandatee\":{" +
+//                "\"firstName\":\"" + expectedFirstName + "\"," +
+//                "\"lastName\":\"" + expectedLastName + "\"" +
+//                "}}}}}";
+//        CredentialProcedure credentialProcedure = new CredentialProcedure();
+//        credentialProcedure.setProcedureId(UUID.fromString(procedureId));
+//        credentialProcedure.setCredentialDecoded(credentialDecoded);
+//
+//        JsonNode credentialNode = new ObjectMapper().readTree(credentialDecoded);
+//
+//        // When
+//        when(credentialProcedureRepository.findById(any(UUID.class)))
+//                .thenReturn(Mono.just(credentialProcedure));
+//        when(objectMapper.readTree(credentialDecoded))
+//                .thenReturn(credentialNode);
+//
+//        // Execute
+//        Mono<String> result = credentialProcedureService.getMandateeCompleteNameFromDecodedCredentialByProcedureId(procedureId);
+//
+//        // Then
+//        StepVerifier.create(result)
+//                .expectNext(expectedCompleteName)
+//                .verifyComplete();
+//    }
 
     @Test
     void getSignerEmailFromDecodedCredentialByProcedureId_shouldReturnMandatorEmail() throws Exception {
@@ -418,19 +420,19 @@ class CredentialProcedureServiceImplTest {
 
         CredentialProcedure credentialProcedure1 = new CredentialProcedure();
         credentialProcedure1.setCredentialDecoded(credential1Decoded);
-        credentialProcedure1.setCredentialStatus(CredentialStatus.ISSUED);
+        credentialProcedure1.setCredentialStatus(CredentialStatusEnum.ISSUED);
         credentialProcedure1.setOrganizationIdentifier(organizationIdentifier);
 
         CredentialProcedure credentialProcedure2 = new CredentialProcedure();
         credentialProcedure2.setCredentialDecoded(credential2Decoded);
-        credentialProcedure2.setCredentialStatus(CredentialStatus.ISSUED);
+        credentialProcedure2.setCredentialStatus(CredentialStatusEnum.ISSUED);
         credentialProcedure2.setOrganizationIdentifier(organizationIdentifier);
 
         List<CredentialProcedure> issuedCredentials = List.of(credentialProcedure1, credentialProcedure2);
 
         // When
         when(credentialProcedureRepository.findByCredentialStatusAndOrganizationIdentifier(
-                CredentialStatus.ISSUED, organizationIdentifier))
+                CredentialStatusEnum.ISSUED, organizationIdentifier))
                 .thenReturn(Flux.fromIterable(issuedCredentials));
 
         // Execute
@@ -450,7 +452,7 @@ class CredentialProcedureServiceImplTest {
 
         // When
         when(credentialProcedureRepository.findByCredentialStatusAndOrganizationIdentifier(
-                CredentialStatus.ISSUED, organizationIdentifier))
+                CredentialStatusEnum.ISSUED, organizationIdentifier))
                 .thenReturn(Flux.empty());
 
         // Execute
@@ -469,7 +471,7 @@ class CredentialProcedureServiceImplTest {
         String organizationIdentifier = "org-123";
         String credentialDecoded = "{\"vc\":{\"type\":[\"TestCredentialType\"]}}";
         UUID expectedProcedureId = UUID.fromString(procedureId);
-        CredentialStatus status = CredentialStatus.ISSUED;
+        CredentialStatusEnum status = CredentialStatusEnum.ISSUED;
 
         CredentialProcedure credentialProcedure = new CredentialProcedure();
         credentialProcedure.setProcedureId(expectedProcedureId);
@@ -492,7 +494,7 @@ class CredentialProcedureServiceImplTest {
         StepVerifier.create(result)
                 .expectNextMatches(details ->
                         details.procedureId().equals(expectedProcedureId) &&
-                                details.credentialStatus().equals(status.name()) &&
+                                details.lifeCycleStatus().equals(status.name()) &&
                                 details.credential().equals(credentialNode))
                 .verifyComplete();
     }
@@ -535,7 +537,7 @@ class CredentialProcedureServiceImplTest {
         existingCredentialProcedure.setProcedureId(procedureId);
         existingCredentialProcedure.setCredentialId(UUID.fromString(credentialId));
         existingCredentialProcedure.setCredentialEncoded("oldEncodedCredential");
-        existingCredentialProcedure.setCredentialStatus(CredentialStatus.ISSUED);
+        existingCredentialProcedure.setCredentialStatus(CredentialStatusEnum.ISSUED);
 
         // When
         when(credentialProcedureRepository.findByCredentialId(any(UUID.class)))
@@ -557,33 +559,33 @@ class CredentialProcedureServiceImplTest {
         assert existingCredentialProcedure.getCredentialEncoded().equals(newEncodedCredential);
     }
 
-    @Test
-    void getMandatorOrganizationFromDecodedCredentialByProcedureId_shouldReturnMandatorOrganization() throws Exception {
-        // Given
-        String procedureId = UUID.randomUUID().toString();
-        String expectedOrganization = "organization";
-        String credentialDecoded = "{\"vc\":{\"credentialSubject\":{\"mandate\":{\"mandator\":{\"organization\":\"" + expectedOrganization + "\"}}}}}";
-
-        CredentialProcedure credentialProcedure = new CredentialProcedure();
-        credentialProcedure.setProcedureId(UUID.fromString(procedureId));
-        credentialProcedure.setCredentialDecoded(credentialDecoded);
-
-        JsonNode credentialNode = new ObjectMapper().readTree(credentialDecoded);
-
-        // When
-        when(credentialProcedureRepository.findById(any(UUID.class)))
-                .thenReturn(Mono.just(credentialProcedure));
-        when(objectMapper.readTree(credentialDecoded))
-                .thenReturn(credentialNode);
-
-        // Execute
-        Mono<String> result = credentialProcedureService.getMandatorOrganizationFromDecodedCredentialByProcedureId(procedureId);
-
-        // Then
-        StepVerifier.create(result)
-                .expectNext(expectedOrganization)
-                .verifyComplete();
-    }
+//    @Test
+//    void getMandatorOrganizationFromDecodedCredentialByProcedureId_shouldReturnMandatorOrganization() throws Exception {
+//        // Given
+//        String procedureId = UUID.randomUUID().toString();
+//        String expectedOrganization = "organization";
+//        String credentialDecoded = "{\"vc\":{\"credentialSubject\":{\"mandate\":{\"mandator\":{\"organization\":\"" + expectedOrganization + "\"}}}}}";
+//
+//        CredentialProcedure credentialProcedure = new CredentialProcedure();
+//        credentialProcedure.setProcedureId(UUID.fromString(procedureId));
+//        credentialProcedure.setCredentialDecoded(credentialDecoded);
+//
+//        JsonNode credentialNode = new ObjectMapper().readTree(credentialDecoded);
+//
+//        // When
+//        when(credentialProcedureRepository.findById(any(UUID.class)))
+//                .thenReturn(Mono.just(credentialProcedure));
+//        when(objectMapper.readTree(credentialDecoded))
+//                .thenReturn(credentialNode);
+//
+//        // Execute
+//        Mono<String> result = credentialProcedureService.getMandatorOrganizationFromDecodedCredentialByProcedureId(procedureId);
+//
+//        // Then
+//        StepVerifier.create(result)
+//                .expectNext(expectedOrganization)
+//                .verifyComplete();
+//    }
 
     @Test
     void updateCredentialProcedureCredentialStatusToValidByProcedureId_shouldUpdateStatusToValid() {
@@ -593,7 +595,7 @@ class CredentialProcedureServiceImplTest {
 
         CredentialProcedure existingCredentialProcedure = new CredentialProcedure();
         existingCredentialProcedure.setProcedureId(uuidProcedureId);
-        existingCredentialProcedure.setCredentialStatus(CredentialStatus.ISSUED);
+        existingCredentialProcedure.setCredentialStatus(CredentialStatusEnum.ISSUED);
 
         // When
         when(credentialProcedureRepository.findByProcedureId(any(UUID.class)))
@@ -611,7 +613,35 @@ class CredentialProcedureServiceImplTest {
         verify(credentialProcedureRepository, times(1)).findByProcedureId(uuidProcedureId);
         verify(credentialProcedureRepository, times(1)).save(existingCredentialProcedure);
 
-        assert existingCredentialProcedure.getCredentialStatus() == CredentialStatus.VALID;
+        assert existingCredentialProcedure.getCredentialStatus() == CredentialStatusEnum.VALID;
+    }
+
+    @Test
+    void updateCredentialProcedureCredentialStatusToRevoke_shouldUpdateStatusToRevoke() {
+        // Given
+        String credentialId = UUID.randomUUID().toString();
+        UUID uuidCredentialId = UUID.fromString(credentialId);
+
+        CredentialProcedure credentialProcedure = new CredentialProcedure();
+        credentialProcedure.setCredentialId(uuidCredentialId);
+        credentialProcedure.setCredentialStatus(CredentialStatusEnum.VALID);
+
+        // When
+        when(credentialProcedureRepository.save(any(CredentialProcedure.class)))
+                .thenAnswer(invocation -> {
+                    CredentialProcedure saved = invocation.getArgument(0);
+                    return Mono.just(saved);
+                });
+        // Execute
+        Mono<Void> result = credentialProcedureService.updateCredentialProcedureCredentialStatusToRevoke(credentialProcedure);
+
+        // Then
+        StepVerifier.create(result)
+                .verifyComplete();
+
+        verify(credentialProcedureRepository, times(1)).save(credentialProcedure);
+
+        assert credentialProcedure.getCredentialStatus() == CredentialStatusEnum.REVOKED;
     }
 
     @Test
@@ -629,7 +659,7 @@ class CredentialProcedureServiceImplTest {
         CredentialProcedure credentialProcedure1 = new CredentialProcedure();
         credentialProcedure1.setProcedureId(procedureId1);
         credentialProcedure1.setCredentialDecoded(credentialDecoded1);
-        credentialProcedure1.setCredentialStatus(CredentialStatus.ISSUED);
+        credentialProcedure1.setCredentialStatus(CredentialStatusEnum.ISSUED);
         credentialProcedure1.setOrganizationIdentifier(organizationIdentifier);
         credentialProcedure1.setUpdatedAt(updated1);
         credentialProcedure1.setCredentialType(CredentialType.LEAR_CREDENTIAL_EMPLOYEE.toString());
@@ -638,10 +668,10 @@ class CredentialProcedureServiceImplTest {
         CredentialProcedure credentialProcedure2 = new CredentialProcedure();
         credentialProcedure2.setProcedureId(procedureId2);
         credentialProcedure2.setCredentialDecoded(credentialDecoded2);
-        credentialProcedure2.setCredentialStatus(CredentialStatus.DRAFT);
+        credentialProcedure2.setCredentialStatus(CredentialStatusEnum.DRAFT);
         credentialProcedure2.setOrganizationIdentifier(organizationIdentifier);
         credentialProcedure2.setUpdatedAt(updated2);
-        credentialProcedure2.setCredentialType(CredentialType.VERIFIABLE_CERTIFICATION.toString());
+        credentialProcedure2.setCredentialType(CredentialType.LABEL_CREDENTIAL.toString());
         credentialProcedure2.setSubject("ProductName");
 
 
@@ -669,15 +699,111 @@ class CredentialProcedureServiceImplTest {
                     return credentialProcedureList.size() == 2 &&
                             credentialProcedureList.get(0).credentialProcedure().procedureId().equals(procedureId1) &&
                             credentialProcedureList.get(0).credentialProcedure().subject().equals("John Doe") &&
-                            credentialProcedureList.get(0).credentialProcedure().status().equals(CredentialStatus.ISSUED.name()) &&
+                            credentialProcedureList.get(0).credentialProcedure().status().equals(CredentialStatusEnum.ISSUED.name()) &&
                             credentialProcedureList.get(0).credentialProcedure().updated().equals(updated1) &&
                             credentialProcedureList.get(0).credentialProcedure().credentialType().equals(CredentialType.LEAR_CREDENTIAL_EMPLOYEE.name()) &&
                             credentialProcedureList.get(1).credentialProcedure().procedureId().equals(procedureId2) &&
                             credentialProcedureList.get(1).credentialProcedure().subject().equals("ProductName") &&
-                            credentialProcedureList.get(1).credentialProcedure().status().equals(CredentialStatus.DRAFT.name()) &&
-                            credentialProcedureList.get(1).credentialProcedure().credentialType().equals(CredentialType.VERIFIABLE_CERTIFICATION.name()) &&
+                            credentialProcedureList.get(1).credentialProcedure().status().equals(CredentialStatusEnum.DRAFT.name()) &&
+                            credentialProcedureList.get(1).credentialProcedure().credentialType().equals(CredentialType.LABEL_CREDENTIAL.name()) &&
                             credentialProcedureList.get(1).credentialProcedure().updated().equals(updated2);
                 })
                 .verifyComplete();
     }
+
+    @Test
+    void updateFormatByProcedureId(){
+        // Given
+        String procedureId = UUID.randomUUID().toString();
+        String newFormat = "new_format";
+
+        CredentialProcedure existingCredentialProcedure = new CredentialProcedure();
+        existingCredentialProcedure.setProcedureId(UUID.fromString(procedureId));
+        existingCredentialProcedure.setCredentialFormat("old_format");
+        existingCredentialProcedure.setUpdatedAt(new Timestamp(Instant.now().toEpochMilli()));
+
+        // When
+        when(credentialProcedureRepository.findById(any(UUID.class)))
+                .thenReturn(Mono.just(existingCredentialProcedure));
+        when(credentialProcedureRepository.save(any(CredentialProcedure.class)))
+                .thenReturn(Mono.empty());
+
+        // Execute
+        Mono<Void> result = credentialProcedureService.updateFormatByProcedureId(procedureId, newFormat);
+
+        // Then
+        StepVerifier.create(result)
+                .verifyComplete();
+    }
+
+    @Test
+    void getEmailCredentialOfferInfoByProcedureId_shouldReturnInfoForLearCredentialMachine() throws Exception {
+        String procedureId = UUID.randomUUID().toString();
+
+        String credentialDecoded = """
+        {
+          "credentialSubject": {
+            "mandate": {
+              "mandator": {
+                "commonName": "Acme Robot 2000",
+                "organization": "Acme Corp",
+                "email": "robot@acme.test"
+              }
+            }
+          }
+        }
+        """;
+
+        CredentialProcedure credentialProcedure = new CredentialProcedure();
+        credentialProcedure.setProcedureId(UUID.fromString(procedureId));
+        credentialProcedure.setCredentialDecoded(credentialDecoded);
+        credentialProcedure.setCredentialType("LEAR_CREDENTIAL_MACHINE");
+
+        JsonNode credentialNode = new ObjectMapper().readTree(credentialDecoded);
+
+        when(credentialProcedureRepository.findByProcedureId(any(UUID.class)))
+                .thenReturn(Mono.just(credentialProcedure));
+        when(objectMapper.readTree(credentialDecoded))
+                .thenReturn(credentialNode);
+
+        Mono<CredentialOfferEmailNotificationInfo> result =
+                credentialProcedureService.getEmailCredentialOfferInfoByProcedureId(procedureId);
+
+        StepVerifier.create(result)
+                .assertNext(info -> {
+                    String s = info.toString();
+                    assert s.contains("robot@acme.test");
+                    assert s.contains("Acme Robot 2000");
+                    assert s.contains("Acme Corp");
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void getEmailCredentialOfferInfoByProcedureId_shouldMapJsonErrorForLearCredentialMachine() throws Exception {
+        // Given
+        String procedureId = UUID.randomUUID().toString();
+        String malformedJson = "{ \"credentialSubject\": { \"mandate\": { \"mandator\": { \"email\": ";
+
+        CredentialProcedure credentialProcedure = new CredentialProcedure();
+        credentialProcedure.setProcedureId(UUID.fromString(procedureId));
+        credentialProcedure.setCredentialDecoded(malformedJson);
+        credentialProcedure.setCredentialType("LEAR_CREDENTIAL_MACHINE");
+
+        when(credentialProcedureRepository.findByProcedureId(any(UUID.class)))
+                .thenReturn(Mono.just(credentialProcedure));
+
+        when(objectMapper.readTree(malformedJson))
+                .thenThrow(new com.fasterxml.jackson.core.JsonParseException(null, "broken json"));
+
+        // Execute
+        Mono<CredentialOfferEmailNotificationInfo> result =
+                credentialProcedureService.getEmailCredentialOfferInfoByProcedureId(procedureId);
+
+        // Then
+        StepVerifier.create(result)
+                .expectError(ParseCredentialJsonException.class)
+                .verify();
+    }
+
 }

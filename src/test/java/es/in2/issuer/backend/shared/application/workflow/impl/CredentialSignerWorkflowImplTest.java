@@ -3,13 +3,15 @@ package es.in2.issuer.backend.shared.application.workflow.impl;
 import es.in2.issuer.backend.shared.application.workflow.DeferredCredentialWorkflow;
 import es.in2.issuer.backend.shared.domain.model.dto.*;
 import es.in2.issuer.backend.shared.domain.model.dto.credential.DetailedIssuer;
+import es.in2.issuer.backend.shared.domain.model.dto.credential.LabelCredential;
+import es.in2.issuer.backend.shared.domain.model.dto.credential.SimpleIssuer;
 import es.in2.issuer.backend.shared.domain.model.dto.credential.lear.employee.LEARCredentialEmployee;
 import es.in2.issuer.backend.shared.domain.model.entities.CredentialProcedure;
 import es.in2.issuer.backend.shared.domain.model.enums.SignatureType;
 import es.in2.issuer.backend.shared.domain.service.*;
 import es.in2.issuer.backend.shared.domain.util.factory.IssuerFactory;
 import es.in2.issuer.backend.shared.domain.util.factory.LEARCredentialEmployeeFactory;
-import es.in2.issuer.backend.shared.domain.util.factory.VerifiableCertificationFactory;
+import es.in2.issuer.backend.shared.domain.util.factory.LabelCredentialFactory;
 import es.in2.issuer.backend.shared.infrastructure.repository.CredentialProcedureRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -42,7 +44,7 @@ class CredentialSignerWorkflowImplTest {
     private LEARCredentialEmployeeFactory learCredentialEmployeeFactory;
 
     @Mock
-    private VerifiableCertificationFactory verifiableCertificationFactory;
+    private LabelCredentialFactory labelCredentialFactory;
 
     @Mock
     private IssuerFactory issuerFactory;
@@ -64,6 +66,9 @@ class CredentialSignerWorkflowImplTest {
 
     @Mock
     private DetailedIssuer detailedIssuer;
+
+    @Mock
+    private SimpleIssuer simpleIssuer;
 
     @Mock
     private VerifierOauth2AccessToken verifierOauth2AccessToken;
@@ -142,27 +147,6 @@ class CredentialSignerWorkflowImplTest {
     }
 
     @Test
-    void signCredentialWithVcAlreadyPresent_Success() {
-        String unsignedCredential = "{\"vc\":{\"id\":\"123\"}}"; // Contiene "vc"
-        String signedCredential = "signedJWTData";
-        String token = "dummyToken";
-        CredentialProcedure credentialProcedure = new CredentialProcedure();
-        credentialProcedure.setCredentialDecoded(unsignedCredential);
-        credentialProcedure.setCredentialType(LEAR_CREDENTIAL_EMPLOYEE_CREDENTIAL_TYPE);
-
-        when(remoteSignatureService.sign(any(SignatureRequest.class), eq(token), eq(procedureId)))
-                .thenReturn(Mono.just(new SignedData(SignatureType.JADES, signedCredential)));
-        when(deferredCredentialWorkflow.updateSignedCredentials(any(SignedCredentials.class))).thenReturn(Mono.empty());
-        when(credentialProcedureRepository.findByProcedureId(UUID.fromString(procedureId))).thenReturn(Mono.just(credentialProcedure));
-        StepVerifier.create(credentialSignerWorkflow.signAndUpdateCredentialByProcedureId(token, procedureId, JWT_VC))
-                .assertNext(result -> assertEquals(signedCredential, result))
-                .verifyComplete();
-
-        verify(remoteSignatureService).sign(any(SignatureRequest.class), eq(token), eq(procedureId));
-        verify(deferredCredentialWorkflow).updateSignedCredentials(any(SignedCredentials.class));
-    }
-
-    @Test
     void signVerifiableCertificationCredential_Success() {
         String decodedCredential = "{\"VerifiableCertification\":\"data\"}";
         String unsignedJwtPayload = "unsignedPayload";
@@ -170,13 +154,13 @@ class CredentialSignerWorkflowImplTest {
         String token = "dummyToken";
         CredentialProcedure credentialProcedure = new CredentialProcedure();
         credentialProcedure.setCredentialDecoded(decodedCredential);
-        credentialProcedure.setCredentialType(VERIFIABLE_CERTIFICATION_CREDENTIAL_TYPE);
-        VerifiableCertification mockCertification = VerifiableCertification.builder().build();
-        VerifiableCertificationJwtPayload mockVerifiablePayload = mock(VerifiableCertificationJwtPayload.class);
+        credentialProcedure.setCredentialType(LABEL_CREDENTIAL_TYPE);
+        LabelCredential mockCertification = LabelCredential.builder().build();
+        LabelCredentialJwtPayload mockVerifiablePayload = mock(LabelCredentialJwtPayload.class);
 
-        when(verifiableCertificationFactory.mapStringToVerifiableCertification(decodedCredential)).thenReturn(mockCertification);
-        when(verifiableCertificationFactory.buildVerifiableCertificationJwtPayload(mockCertification)).thenReturn(Mono.just(mockVerifiablePayload));
-        when(verifiableCertificationFactory.convertVerifiableCertificationJwtPayloadInToString(any(VerifiableCertificationJwtPayload.class)))
+        when(labelCredentialFactory.mapStringToLabelCredential(decodedCredential)).thenReturn(mockCertification);
+        when(labelCredentialFactory.buildLabelCredentialJwtPayload(mockCertification)).thenReturn(Mono.just(mockVerifiablePayload));
+        when(labelCredentialFactory.convertLabelCredentialJwtPayloadInToString(any(LabelCredentialJwtPayload.class)))
                 .thenReturn(Mono.just(unsignedJwtPayload));
         when(remoteSignatureService.sign(any(SignatureRequest.class), eq(token), eq(procedureId)))
                 .thenReturn(Mono.just(new SignedData(SignatureType.JADES, signedCredential)));
@@ -186,8 +170,8 @@ class CredentialSignerWorkflowImplTest {
                 .assertNext(result -> assertEquals(signedCredential, result))
                 .verifyComplete();
 
-        verify(verifiableCertificationFactory).mapStringToVerifiableCertification(decodedCredential);
-        verify(verifiableCertificationFactory).buildVerifiableCertificationJwtPayload(any(VerifiableCertification.class));
+        verify(labelCredentialFactory).mapStringToLabelCredential(decodedCredential);
+        verify(labelCredentialFactory).buildLabelCredentialJwtPayload(any(LabelCredential.class));
         verify(remoteSignatureService).sign(any(SignatureRequest.class), eq(token), eq(procedureId));
         verify(deferredCredentialWorkflow).updateSignedCredentials(any(SignedCredentials.class));
     }
@@ -229,16 +213,16 @@ class CredentialSignerWorkflowImplTest {
         String token = "dummyToken";
         CredentialProcedure credentialProcedure = new CredentialProcedure();
         credentialProcedure.setCredentialDecoded(decodedCredential);
-        credentialProcedure.setCredentialType(VERIFIABLE_CERTIFICATION_CREDENTIAL_TYPE);
+        credentialProcedure.setCredentialType(LABEL_CREDENTIAL_TYPE);
 
-        when(verifiableCertificationFactory.mapStringToVerifiableCertification(decodedCredential))
+        when(labelCredentialFactory.mapStringToLabelCredential(decodedCredential))
                 .thenThrow(new RuntimeException("Mapping error"));
         when(credentialProcedureRepository.findByProcedureId(UUID.fromString(procedureId))).thenReturn(Mono.just(credentialProcedure));
         StepVerifier.create(credentialSignerWorkflow.signAndUpdateCredentialByProcedureId(token, procedureId, JWT_VC))
                 .expectError(IllegalArgumentException.class)
                 .verify();
 
-        verify(verifiableCertificationFactory).mapStringToVerifiableCertification(decodedCredential);
+        verify(labelCredentialFactory).mapStringToLabelCredential(decodedCredential);
         verify(remoteSignatureService, never()).sign(any(SignatureRequest.class), eq(token), eq(procedureId));
         verify(deferredCredentialWorkflow, never()).updateSignedCredentials(any(SignedCredentials.class));
     }
@@ -371,112 +355,6 @@ class CredentialSignerWorkflowImplTest {
     }
 
     @Test
-    void testRetrySignUnsignedCredential_VerifiableCertification_Success() {
-        // Mocks bàsics
-        CredentialProcedure credentialProcedure = mock(CredentialProcedure.class);
-        when(credentialProcedure.getCredentialType()).thenReturn(VERIFIABLE_CERTIFICATION_CREDENTIAL_TYPE);
-        // simulant el JSON cridat després per enviar el VC
-        String decodedJson = """
-            {
-              "credentialSubject": {
-                "product": { "productId": "prod-123" },
-                "company": { "email": "foo@bar.com" }
-              }
-            }
-            """;
-        when(credentialProcedure.getCredentialDecoded()).thenReturn(decodedJson);
-
-        // Flux principal
-        when(credentialProcedureRepository.findByProcedureId(UUID.fromString(procedureId)))
-                .thenReturn(Mono.just(credentialProcedure));
-        when(issuerFactory.createIssuer(procedureId, VERIFIABLE_CERTIFICATION))
-                .thenReturn(Mono.just(detailedIssuer));
-
-        when(verifiableCertificationFactory.mapIssuerAndSigner(procedureId, detailedIssuer))
-                .thenReturn(Mono.just("bindedVc"));
-        when(credentialProcedureService.updateDecodedCredentialByProcedureId(procedureId, "bindedVc", JWT_VC))
-                .thenReturn(Mono.empty());
-        // signAndUpdateCredential
-        doReturn(Mono.just("signedVc"))
-                .when(credentialSignerWorkflow)
-                .signAndUpdateCredentialByProcedureId(authorizationHeader, procedureId, JWT_VC);
-        when(credentialProcedureService.updateCredentialProcedureCredentialStatusToValidByProcedureId(procedureId))
-                .thenReturn(Mono.empty());
-        // després del .then()
-        when(credentialProcedureRepository.findByProcedureId(UUID.fromString(procedureId)))
-                .thenReturn(Mono.just(credentialProcedure));
-        when(credentialProcedureRepository.save(any()))
-                .thenReturn(Mono.just(credentialProcedure));
-        // enviament VC
-        when(deferredCredentialMetadataService.getResponseUriByProcedureId(procedureId))
-                .thenReturn(Mono.just("https://callback.example.com"));
-        when(m2mTokenService.getM2MToken())
-                .thenReturn(Mono.just(verifierOauth2AccessToken));
-        when(verifierOauth2AccessToken.accessToken()).thenReturn("access-token");
-        when(credentialDeliveryService.sendVcToResponseUri(
-                "https://callback.example.com",
-                "signedVc",
-                "prod-123",
-                "foo@bar.com",
-                "access-token"))
-                .thenReturn(Mono.empty());
-
-        // Verificació
-        StepVerifier.create(credentialSignerWorkflow.retrySignUnsignedCredential(authorizationHeader, procedureId))
-                .verifyComplete();
-
-        // Verifiquem que s’han cridat tots els passos
-        verify(issuerFactory).createIssuer(procedureId, VERIFIABLE_CERTIFICATION);
-        verify(verifiableCertificationFactory).mapIssuerAndSigner(procedureId, detailedIssuer);
-        verify(credentialProcedureService).updateDecodedCredentialByProcedureId(procedureId, "bindedVc", JWT_VC);
-        verify(credentialSignerWorkflow).signAndUpdateCredentialByProcedureId(authorizationHeader, procedureId, JWT_VC);
-        verify(credentialProcedureService).updateCredentialProcedureCredentialStatusToValidByProcedureId(procedureId);
-        verify(deferredCredentialMetadataService).getResponseUriByProcedureId(procedureId);
-        verify(m2mTokenService).getM2MToken();
-        verify(credentialDeliveryService).sendVcToResponseUri(
-                "https://callback.example.com", "signedVc", "prod-123", "foo@bar.com", "access-token");
-    }
-
-    @Test
-    void testRetrySignUnsignedCredential_VerifiableCertification_MissingResponseUri() {
-        // Preparació del credentialProcedure
-        CredentialProcedure credentialProcedure = mock(CredentialProcedure.class);
-        when(credentialProcedure.getCredentialType()).thenReturn(VERIFIABLE_CERTIFICATION_CREDENTIAL_TYPE);
-        // (Hem eliminat el stub de getCredentialDecoded perquè no s'utilitza aquí)
-        when(credentialProcedureRepository.findByProcedureId(UUID.fromString(procedureId)))
-                .thenReturn(Mono.just(credentialProcedure));
-
-        // Simulem el mapping fins a decoded-update
-        doReturn(Mono.just(detailedIssuer))
-                .when(issuerFactory)
-                .createIssuer(eq(procedureId), anyString());
-        when(verifiableCertificationFactory.mapIssuerAndSigner(procedureId, detailedIssuer))
-                .thenReturn(Mono.just("bindedVc"));
-        when(credentialProcedureService.updateDecodedCredentialByProcedureId(procedureId, "bindedVc", JWT_VC))
-                .thenReturn(Mono.empty());
-
-        // Simulem la signatura JADES i l'update de l'estat
-        doReturn(Mono.just("signedVc"))
-                .when(credentialSignerWorkflow)
-                .signAndUpdateCredentialByProcedureId(authorizationHeader, procedureId, JWT_VC);
-        when(credentialProcedureService.updateCredentialProcedureCredentialStatusToValidByProcedureId(procedureId))
-                .thenReturn(Mono.empty());
-        when(credentialProcedureRepository.save(any()))
-                .thenReturn(Mono.just(credentialProcedure));
-
-        // Ara provoquem el cas d'error de falta de responseUri
-        when(deferredCredentialMetadataService.getResponseUriByProcedureId(procedureId))
-                .thenReturn(Mono.empty());
-
-        StepVerifier.create(
-                        credentialSignerWorkflow.retrySignUnsignedCredential(authorizationHeader, procedureId)
-                )
-                .expectErrorMessage("Missing responseUri for procedureId: " + procedureId)
-                .verify();
-    }
-
-
-    @Test
     void testRetrySignUnsignedCredential_DefaultCase_ThrowsIllegalArgument() {
         CredentialProcedure credentialProcedure = mock(CredentialProcedure.class);
         when(credentialProcedure.getCredentialType()).thenReturn("UNKNOWN_TYPE");
@@ -490,5 +368,77 @@ class CredentialSignerWorkflowImplTest {
                 )
                 .verify();
     }
+
+    @Test
+    void testRetrySignUnsignedCredential_LabelCredential_UsesOwnerEmailAndCredentialIdToSend() {
+        // 1) First find(): mapping + update decoded
+        CredentialProcedure initialProcedure = mock(CredentialProcedure.class);
+        when(initialProcedure.getCredentialType()).thenReturn(LABEL_CREDENTIAL_TYPE);
+
+        // 2) Second find(): after signing and updating as VALID, we get email and productId
+        CredentialProcedure updatedProcedure = mock(CredentialProcedure.class);
+        when(updatedProcedure.getCredentialType()).thenReturn(LABEL_CREDENTIAL_TYPE);
+        UUID credentialId = UUID.fromString("123e4567-e89b-12d3-a456-426614174000");
+        when(updatedProcedure.getCredentialId()).thenReturn(credentialId);
+        when(updatedProcedure.getOwnerEmail()).thenReturn("foo@bar.com");
+
+        // findByProcedureId is called at least twice
+        when(credentialProcedureRepository.findByProcedureId(UUID.fromString(procedureId)))
+                .thenReturn(Mono.just(initialProcedure), Mono.just(updatedProcedure));
+
+        // Map issuer -> bind VC -> update decoded
+        when(issuerFactory.createSimpleIssuer(procedureId, LABEL_CREDENTIAL))
+                .thenReturn(Mono.just(simpleIssuer));
+        when(labelCredentialFactory.mapIssuer(procedureId, simpleIssuer))
+                .thenReturn(Mono.just("bindedVc"));
+        when(credentialProcedureService.updateDecodedCredentialByProcedureId(procedureId, "bindedVc", JWT_VC))
+                .thenReturn(Mono.empty());
+
+        // Signature and update state
+        doReturn(Mono.just("signedVc"))
+                .when(credentialSignerWorkflow)
+                .signAndUpdateCredentialByProcedureId(authorizationHeader, procedureId, JWT_VC);
+        when(credentialProcedureService.updateCredentialProcedureCredentialStatusToValidByProcedureId(procedureId))
+                .thenReturn(Mono.empty());
+
+        // Save updatedAt
+        when(credentialProcedureRepository.save(any()))
+                .thenReturn(Mono.just(updatedProcedure));
+
+        // Send VC: responseUri + token + delivery
+        when(deferredCredentialMetadataService.getResponseUriByProcedureId(procedureId))
+                .thenReturn(Mono.just("https://callback.example.com"));
+        when(m2mTokenService.getM2MToken())
+                .thenReturn(Mono.just(verifierOauth2AccessToken));
+        when(verifierOauth2AccessToken.accessToken()).thenReturn("access-token");
+        when(credentialDeliveryService.sendVcToResponseUri(
+                "https://callback.example.com",
+                "signedVc",
+                credentialId.toString(),
+                "foo@bar.com",
+                "access-token"
+        )).thenReturn(Mono.empty());
+
+        // Execution
+        StepVerifier.create(credentialSignerWorkflow.retrySignUnsignedCredential(authorizationHeader, procedureId))
+                .verifyComplete();
+
+        // Verify
+        verify(issuerFactory).createSimpleIssuer(procedureId, LABEL_CREDENTIAL);
+        verify(labelCredentialFactory).mapIssuer(procedureId, simpleIssuer);
+        verify(credentialProcedureService).updateDecodedCredentialByProcedureId(procedureId, "bindedVc", JWT_VC);
+        verify(credentialSignerWorkflow).signAndUpdateCredentialByProcedureId(authorizationHeader, procedureId, JWT_VC);
+        verify(credentialProcedureService).updateCredentialProcedureCredentialStatusToValidByProcedureId(procedureId);
+        verify(credentialProcedureRepository, times(2)).findByProcedureId(UUID.fromString(procedureId));
+        verify(credentialProcedureRepository).save(any());
+        verify(credentialDeliveryService).sendVcToResponseUri(
+                "https://callback.example.com",
+                "signedVc",
+                credentialId.toString(),
+                "foo@bar.com",
+                "access-token"
+        );
+    }
+
 
 }

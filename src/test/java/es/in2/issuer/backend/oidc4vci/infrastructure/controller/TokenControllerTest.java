@@ -2,6 +2,7 @@ package es.in2.issuer.backend.oidc4vci.infrastructure.controller;
 
 import es.in2.issuer.backend.oidc4vci.domain.model.TokenResponse;
 import es.in2.issuer.backend.oidc4vci.domain.service.TokenService;
+import es.in2.issuer.backend.shared.infrastructure.controller.error.ErrorResponseFactory;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.reactive.WebFluxTest;
@@ -28,6 +29,9 @@ class TokenControllerTest {
     @Autowired
     WebTestClient webTestClient;
 
+    @MockBean
+    ErrorResponseFactory errorResponseFactory;
+
     @Test
     void testGetEntitiesSuccess() {
         String grantType = GRANT_TYPE;
@@ -37,8 +41,7 @@ class TokenControllerTest {
                 "access-token",
                 "token-type",
                 3600L,
-                "nonce",
-                3600L);
+                "null");
         when(tokenService.generateTokenResponse(
                 grantType,
                 preAuthorizedCode,

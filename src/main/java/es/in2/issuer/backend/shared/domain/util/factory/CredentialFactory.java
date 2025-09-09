@@ -3,7 +3,7 @@ package es.in2.issuer.backend.shared.domain.util.factory;
 import com.fasterxml.jackson.databind.JsonNode;
 import es.in2.issuer.backend.shared.domain.exception.CredentialTypeUnsupportedException;
 import es.in2.issuer.backend.shared.domain.model.dto.CredentialProcedureCreationRequest;
-import es.in2.issuer.backend.shared.domain.model.dto.PreSubmittedCredentialRequest;
+import es.in2.issuer.backend.shared.domain.model.dto.PreSubmittedCredentialDataRequest;
 import es.in2.issuer.backend.shared.domain.service.CredentialProcedureService;
 import es.in2.issuer.backend.shared.domain.service.DeferredCredentialMetadataService;
 import lombok.RequiredArgsConstructor;
@@ -11,8 +11,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
+import static es.in2.issuer.backend.shared.domain.util.Constants.*;
+import static es.in2.issuer.backend.shared.domain.util.Constants.LABEL_CREDENTIAL;
 import static es.in2.issuer.backend.shared.domain.util.Constants.LEAR_CREDENTIAL_EMPLOYEE;
-import static es.in2.issuer.backend.shared.domain.util.Constants.VERIFIABLE_CERTIFICATION;
 
 @Component
 @RequiredArgsConstructor
@@ -21,39 +22,71 @@ public class CredentialFactory {
 
     public final LEARCredentialEmployeeFactory learCredentialEmployeeFactory;
     public final LEARCredentialMachineFactory learCredentialMachineFactory;
-    public final VerifiableCertificationFactory verifiableCertificationFactory;
+    public final LabelCredentialFactory labelCredentialFactory;
     private final CredentialProcedureService credentialProcedureService;
     private final DeferredCredentialMetadataService deferredCredentialMetadataService;
 
-    public Mono<CredentialProcedureCreationRequest> mapCredentialIntoACredentialProcedureRequest(String processId, PreSubmittedCredentialRequest preSubmittedCredentialRequest, String token) {
+    public Mono<CredentialProcedureCreationRequest> mapCredentialIntoACredentialProcedureRequest(String processId, PreSubmittedCredentialDataRequest preSubmittedCredentialRequest, String email) {
         JsonNode credential = preSubmittedCredentialRequest.payload();
         String operationMode = preSubmittedCredentialRequest.operationMode();
         if (preSubmittedCredentialRequest.schema().equals(LEAR_CREDENTIAL_EMPLOYEE)) {
-            return learCredentialEmployeeFactory.mapAndBuildLEARCredentialEmployee(credential, operationMode)
+            return learCredentialEmployeeFactory.mapAndBuildLEARCredentialEmployee(credential, operationMode, email)
                     .doOnSuccess(learCredentialEmployee -> log.info("ProcessID: {} - LEARCredentialEmployee mapped: {}", processId, credential));
-        } else if (preSubmittedCredentialRequest.schema().equals(VERIFIABLE_CERTIFICATION)) {
-            return verifiableCertificationFactory.mapAndBuildVerifiableCertification(credential, token, operationMode)
-                    .doOnSuccess(verifiableCertification -> log.info("ProcessID: {} - VerifiableCertification mapped: {}", processId, credential));
+        } else if (preSubmittedCredentialRequest.schema().equals(LABEL_CREDENTIAL)) {
+            return labelCredentialFactory.mapAndBuildLabelCredential(credential, operationMode, email)
+                    .doOnSuccess(verifiableCertification -> log.info("ProcessID: {} - Label Credential mapped: {}", processId, credential));
+        } else if(preSubmittedCredentialRequest.schema().equals(LEAR_CREDENTIAL_MACHINE)) {
+            return learCredentialMachineFactory.mapAndBuildLEARCredentialMachine(credential, operationMode, email)
+                    .doOnSuccess(learCredentialEmployee -> log.info("ProcessID: {} - LEARCredentialMachine mapped: {}", processId, credential));
         }
         return Mono.error(new CredentialTypeUnsupportedException(preSubmittedCredentialRequest.schema()));
     }
-    public Mono<String> mapCredentialAndBindMandateeId(String processId, String credentialType, String decodedCredential, String mandateeId){
+    public Mono<String> bindCryptographicCredentialSubjectId(String processId, String credentialType, String decodedCredential, String mandateeId){
         if (credentialType.equals(LEAR_CREDENTIAL_EMPLOYEE)) {
-            return learCredentialEmployeeFactory.mapCredentialAndBindMandateeIdInToTheCredential(decodedCredential, mandateeId)
+            return learCredentialEmployeeFactory.bindCryptographicCredentialSubjectId(decodedCredential, mandateeId)
                     .doOnSuccess(learCredentialEmployee -> log.info("ProcessID: {} - Credential mapped and bind to the id: {}", processId, learCredentialEmployee));
         }
         return Mono.error(new CredentialTypeUnsupportedException(credentialType));
     }
 
-    public Mono<Void> mapCredentialBindIssuerAndUpdateDB(String processId, String procedureId, String decodedCredential, String credentialType, String format, String authServerNonce) {
-        if (credentialType.equals(LEAR_CREDENTIAL_EMPLOYEE)) {
-            return learCredentialEmployeeFactory.mapCredentialAndBindIssuerInToTheCredential(decodedCredential, procedureId)
-                    .flatMap(bindCredential -> {
-                        log.info("ProcessID: {} - Credential mapped and bind to the issuer: {}", processId, bindCredential);
-                        return credentialProcedureService.updateDecodedCredentialByProcedureId(procedureId, bindCredential, format)
-                                .then(deferredCredentialMetadataService.updateDeferredCredentialByAuthServerNonce(authServerNonce, format));
-                    });
-        }
-        return Mono.error(new CredentialTypeUnsupportedException(credentialType));
+    public Mono<Void> mapCredentialBindIssuerAndUpdateDB(
+            String processId,
+            String procedureId,
+            String decodedCredential,
+            String credentialType,
+            String format,
+            String authServerNonce) {
+
+        Mono<String> bindMono = switch (credentialType) {
+            case LEAR_CREDENTIAL_EMPLOYEE ->
+                    learCredentialEmployeeFactory
+                            .mapCredentialAndBindIssuerInToTheCredential(decodedCredential, procedureId);
+            case LABEL_CREDENTIAL ->
+                    labelCredentialFactory
+                            .mapCredentialAndBindIssuerInToTheCredential(decodedCredential, procedureId);
+            case LEAR_CREDENTIAL_MACHINE ->
+                learCredentialMachineFactory
+                        .mapCredentialAndBindIssuerInToTheCredential(decodedCredential, procedureId);
+            default ->
+                    Mono.error(new CredentialTypeUnsupportedException(credentialType));
+        };
+
+        return bindMono
+                .flatMap(boundCredential -> {
+                    log.info("ProcessID: {} - Credential mapped and bind to the issuer: {}", processId, boundCredential);
+                    return updateDecodedAndDeferred(procedureId, boundCredential, format, authServerNonce);
+                });
+    }
+
+    private Mono<Void> updateDecodedAndDeferred(
+            String procedureId,
+            String boundCredential,
+            String format,
+            String authServerNonce) {
+
+        return credentialProcedureService
+                .updateDecodedCredentialByProcedureId(procedureId, boundCredential, format)
+                .then(deferredCredentialMetadataService.updateDeferredCredentialByAuthServerNonce(authServerNonce, format)
+                );
     }
 }

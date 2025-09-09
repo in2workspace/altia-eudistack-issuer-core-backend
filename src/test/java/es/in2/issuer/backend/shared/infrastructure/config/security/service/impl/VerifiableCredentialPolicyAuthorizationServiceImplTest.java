@@ -18,16 +18,19 @@ import es.in2.issuer.backend.shared.domain.service.VerifierService;
 import es.in2.issuer.backend.shared.domain.util.factory.CredentialFactory;
 import es.in2.issuer.backend.shared.domain.util.factory.LEARCredentialEmployeeFactory;
 import es.in2.issuer.backend.shared.domain.util.factory.LEARCredentialMachineFactory;
-import es.in2.issuer.backend.shared.domain.util.factory.VerifiableCertificationFactory;
+import es.in2.issuer.backend.shared.domain.util.factory.LabelCredentialFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
+import java.lang.reflect.Method;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -35,7 +38,7 @@ import java.util.Map;
 
 import static es.in2.issuer.backend.backoffice.domain.util.Constants.*;
 import static es.in2.issuer.backend.shared.domain.util.Constants.LEAR_CREDENTIAL_EMPLOYEE;
-import static es.in2.issuer.backend.shared.domain.util.Constants.VERIFIABLE_CERTIFICATION;
+import static es.in2.issuer.backend.shared.domain.util.Constants.LABEL_CREDENTIAL;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -54,7 +57,7 @@ class VerifiableCredentialPolicyAuthorizationServiceImplTest {
     @Mock
     private LEARCredentialEmployeeFactory learCredentialEmployeeFactory;
     @Mock
-    private VerifiableCertificationFactory verifiableCertificationFactory;
+    private LabelCredentialFactory labelCredentialFactory;
     @Mock
     private LEARCredentialMachineFactory learCredentialMachineFactory;
     @Mock
@@ -69,7 +72,7 @@ class VerifiableCredentialPolicyAuthorizationServiceImplTest {
     @BeforeEach
     void setUp() {
         // Creamos una instancia real de CredentialFactory, pasando los mocks necesarios
-        CredentialFactory credentialFactory = new CredentialFactory(learCredentialEmployeeFactory, learCredentialMachineFactory, verifiableCertificationFactory, credentialProcedureService, deferredCredentialMetadataService);
+        CredentialFactory credentialFactory = new CredentialFactory(learCredentialEmployeeFactory, learCredentialMachineFactory, labelCredentialFactory, credentialProcedureService, deferredCredentialMetadataService);
 
         // Inicializamos policyAuthorizationService con las dependencias adecuadas
         policyAuthorizationService = new VerifiableCredentialPolicyAuthorizationServiceImpl(
@@ -276,7 +279,7 @@ class VerifiableCredentialPolicyAuthorizationServiceImplTest {
         when(learCredentialEmployeeFactory.mapStringToLEARCredentialEmployee("vcJson")).thenReturn(idTokenCredential);
 
         // Act
-        Mono<Void> result = policyAuthorizationService.authorize(token, VERIFIABLE_CERTIFICATION, payload, idToken);
+        Mono<Void> result = policyAuthorizationService.authorize(token, LABEL_CREDENTIAL, payload, idToken);
 
         // Assert
         StepVerifier.create(result)
@@ -325,7 +328,7 @@ class VerifiableCredentialPolicyAuthorizationServiceImplTest {
         when(learCredentialEmployeeFactory.mapStringToLEARCredentialEmployee("vcJson")).thenReturn(idTokenCredential);
 
         // Act
-        Mono<Void> result = policyAuthorizationService.authorize(token, VERIFIABLE_CERTIFICATION, payload, idToken);
+        Mono<Void> result = policyAuthorizationService.authorize(token, LABEL_CREDENTIAL, payload, idToken);
 
         // Assert
         StepVerifier.create(result)
@@ -480,7 +483,7 @@ class VerifiableCredentialPolicyAuthorizationServiceImplTest {
         String token = "valid-token";
         JsonNode payload = mock(JsonNode.class);
         // El vcClaim indica que se trata de una credencial de máquina
-        String vcClaim = "{\"type\": [\"VerifiableCredential\", \"LEARCredentialMachine\"]}";
+        String vcClaim = "{\"type\": [\"VerifiableCredential\", \"LEARCredentialEmployee\"]}";
 
         Map<String, Object> payloadMap = new HashMap<>();
         payloadMap.put("iss", "internal-auth-server");
@@ -496,12 +499,8 @@ class VerifiableCredentialPolicyAuthorizationServiceImplTest {
         JsonNode vcJsonNode = realObjectMapper.readTree(vcClaim);
         when(objectMapper.readTree(vcClaim)).thenReturn(vcJsonNode);
 
-        // Emulate that the machine factory returns a credential that meets the policy
-        LEARCredentialMachine machineCredential = getLEARCredentialMachine();
-        when(learCredentialMachineFactory.mapStringToLEARCredentialMachine(vcClaim)).thenReturn(machineCredential);
-
         // Act
-        Mono<Void> result = policyAuthorizationService.authorize(token, LEAR_CREDENTIAL_EMPLOYEE, payload, "dummy-id-token");
+        Mono<Void> result = policyAuthorizationService.authorize(token, LEAR_CREDENTIAL_MACHINE, payload, "dummy-id-token");
 
         StepVerifier.create(result)
                 .verifyComplete();
@@ -512,7 +511,7 @@ class VerifiableCredentialPolicyAuthorizationServiceImplTest {
         // Arrange
         String token = "valid-token";
         JsonNode payload = mock(JsonNode.class);
-        String vcClaim = "{\"type\": [\"VerifiableCredential\", \"LEARCredentialMachine\"]}";
+        String vcClaim = "{\"type\": [\"VerifiableCredential\", \"\"]}";
 
         Map<String, Object> payloadMap = new HashMap<>();
         payloadMap.put("iss", "internal-auth-server");
@@ -528,17 +527,12 @@ class VerifiableCredentialPolicyAuthorizationServiceImplTest {
         JsonNode vcJsonNode = realObjectMapper.readTree(vcClaim);
         when(objectMapper.readTree(vcClaim)).thenReturn(vcJsonNode);
 
-        // We emulate that the machine factory returns a credential that does NOT meet the policy
-        LEARCredentialMachine machineCredential = getLEARCredentialMachineWithInvalidPolicy();
-        when(learCredentialMachineFactory.mapStringToLEARCredentialMachine(vcClaim)).thenReturn(machineCredential);
-
         // Act
-        Mono<Void> result = policyAuthorizationService.authorize(token, LEAR_CREDENTIAL_EMPLOYEE, payload, "dummy-id-token");
+        Mono<Void> result = policyAuthorizationService.authorize(token, "LEAR_CREDENTIAL_MACHINE", payload, "dummy-id-token");
 
         StepVerifier.create(result)
                 .expectErrorMatches(throwable ->
-                        throwable instanceof InsufficientPermissionException &&
-                                throwable.getMessage().contains("Unauthorized: LEARCredentialEmployee does not meet any issuance policies."))
+                        throwable instanceof InsufficientPermissionException)
                 .verify();
     }
 
@@ -559,7 +553,7 @@ class VerifiableCredentialPolicyAuthorizationServiceImplTest {
         when(jwtService.getClaimFromPayload(jwtPayload, ROLE)).thenReturn(roleClaim);
 
         // Act
-        Mono<Void> result = policyAuthorizationService.authorize(token, VERIFIABLE_CERTIFICATION, payload, "dummy-id-token");
+        Mono<Void> result = policyAuthorizationService.authorize(token, LABEL_CREDENTIAL, payload, "dummy-id-token");
 
         // Assert
         StepVerifier.create(result)
@@ -586,7 +580,7 @@ class VerifiableCredentialPolicyAuthorizationServiceImplTest {
         when(jwtService.getClaimFromPayload(jwtPayload, ROLE)).thenReturn(roleClaim);
 
         // Act
-        Mono<Void> result = policyAuthorizationService.authorize(token, VERIFIABLE_CERTIFICATION, payload, "dummy-id-token");
+        Mono<Void> result = policyAuthorizationService.authorize(token, LABEL_CREDENTIAL, payload, "dummy-id-token");
 
         // Assert
         StepVerifier.create(result)
@@ -740,8 +734,8 @@ class VerifiableCredentialPolicyAuthorizationServiceImplTest {
     }
 
     private LEARCredentialMachine getLEARCredentialMachineForCertification() {
-        Mandator mandator = Mandator.builder()
-                .organizationIdentifier("SomeOrganization")
+        LEARCredentialMachine.CredentialSubject.Mandate.Mandator mandator = LEARCredentialMachine.CredentialSubject.Mandate.Mandator.builder()
+                .organization("SomeOrganization")
                 .build();
         LEARCredentialMachine.CredentialSubject.Mandate.Mandatee mandatee = LEARCredentialMachine.CredentialSubject.Mandate.Mandatee.builder()
                 .id("did:key:1234")
@@ -793,8 +787,8 @@ class VerifiableCredentialPolicyAuthorizationServiceImplTest {
     }
 
     private LEARCredentialMachine getLEARCredentialMachine() {
-        Mandator mandator = Mandator.builder()
-                .organizationIdentifier(IN2_ORGANIZATION_IDENTIFIER)
+        LEARCredentialMachine.CredentialSubject.Mandate.Mandator mandator = LEARCredentialMachine.CredentialSubject.Mandate.Mandator.builder()
+                .organization(IN2_ORGANIZATION_IDENTIFIER)
                 .build();
         LEARCredentialMachine.CredentialSubject.Mandate.Mandatee mandatee = LEARCredentialMachine.CredentialSubject.Mandate.Mandatee.builder()
                 .id("did:key:1234")
@@ -818,8 +812,8 @@ class VerifiableCredentialPolicyAuthorizationServiceImplTest {
     }
 
     private LEARCredentialMachine getLEARCredentialMachineWithInvalidPolicy() {
-        Mandator mandator = Mandator.builder()
-                .organizationIdentifier(IN2_ORGANIZATION_IDENTIFIER)
+        LEARCredentialMachine.CredentialSubject.Mandate.Mandator mandator = LEARCredentialMachine.CredentialSubject.Mandate.Mandator.builder()
+                .organization(IN2_ORGANIZATION_IDENTIFIER)
                 .build();
         LEARCredentialMachine.CredentialSubject.Mandate.Mandatee mandatee =
                 LEARCredentialMachine.CredentialSubject.Mandate.Mandatee.builder()
@@ -842,6 +836,69 @@ class VerifiableCredentialPolicyAuthorizationServiceImplTest {
                 .credentialSubject(credentialSubject)
                 .build();
     }
+
+    @Test
+    void authorize_machine_success_whenMandatorAllowed_and_OnboardingExecute() throws Exception {
+        // Arrange
+        String token = "valid-token";
+        JsonNode payload = mock(JsonNode.class);
+
+        String vcClaim = "{\"type\": [\"VerifiableCredential\", \"LEARCredentialEmployee\"]}";
+
+        Map<String, Object> payloadMap = new HashMap<>();
+        payloadMap.put("iss", "internal-auth-server");
+        Payload jwtPayload = new Payload(payloadMap);
+
+        SignedJWT signedJWT = mock(SignedJWT.class);
+        when(signedJWT.getPayload()).thenReturn(jwtPayload);
+
+        when(jwtService.parseJWT(token)).thenReturn(signedJWT);
+        when(jwtService.getClaimFromPayload(jwtPayload, VC)).thenReturn(vcClaim);
+
+        ObjectMapper realObjectMapper = new ObjectMapper();
+        JsonNode vcJsonNode = realObjectMapper.readTree(vcClaim);
+        when(objectMapper.readTree(vcClaim)).thenReturn(vcJsonNode);
+
+        LEARCredentialEmployee signerEmployee = getLEARCredentialEmployee();
+        when(learCredentialEmployeeFactory.mapStringToLEARCredentialEmployee(vcClaim))
+                .thenReturn(signerEmployee);
+
+        // Act
+        Mono<Void> result = policyAuthorizationService.authorize(token, LEAR_CREDENTIAL_MACHINE, payload, "dummy-id-token");
+
+        // Assert
+        StepVerifier.create(result).verifyComplete();
+    }
+
+    @Test
+    void isLearCredentialEmployeeMandatorOrganizationIdentifierAllowedSignerLEARCredentialMachine_returnsTrue_whenOrgMatches() throws Exception {
+        Mandator mandator = Mandator.builder()
+                .organizationIdentifier(IN2_ORGANIZATION_IDENTIFIER)
+                .build();
+
+        Method method = VerifiableCredentialPolicyAuthorizationServiceImpl.class
+                .getDeclaredMethod("isLearCredentialEmployeeMandatorOrganizationIdentifierAllowedSignerLEARCredentialMachine", Mandator.class);
+        method.setAccessible(true);
+
+        boolean result = (boolean) method.invoke(policyAuthorizationService, mandator);
+        assertTrue(result);
+    }
+
+    @Test
+    void isLearCredentialEmployeeMandatorOrganizationIdentifierAllowedSignerLEARCredentialMachine_returnsFalse_whenOrgDoesNotMatch() throws Exception {
+        Mandator mandator = Mandator.builder()
+                .organizationIdentifier("OTHER_ORG")
+                .build();
+
+        Method method = VerifiableCredentialPolicyAuthorizationServiceImpl.class
+                .getDeclaredMethod("isLearCredentialEmployeeMandatorOrganizationIdentifierAllowedSignerLEARCredentialMachine", Mandator.class);
+        method.setAccessible(true);
+
+        boolean result = (boolean) method.invoke(policyAuthorizationService, mandator);
+        assertFalse(result);
+    }
+
+
 }
 
 

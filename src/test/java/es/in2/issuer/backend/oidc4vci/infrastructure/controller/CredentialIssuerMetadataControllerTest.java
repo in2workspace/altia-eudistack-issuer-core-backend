@@ -2,6 +2,7 @@ package es.in2.issuer.backend.oidc4vci.infrastructure.controller;
 
 import es.in2.issuer.backend.oidc4vci.application.workflow.GetCredentialIssuerMetadataWorkflow;
 import es.in2.issuer.backend.oidc4vci.domain.model.CredentialIssuerMetadata;
+import es.in2.issuer.backend.shared.infrastructure.controller.error.ErrorResponseFactory;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.reactive.WebFluxTest;
@@ -29,6 +30,9 @@ class CredentialIssuerMetadataControllerTest {
     private WebTestClient webTestClient;
 
     @MockBean
+    ErrorResponseFactory errorResponseFactory;
+
+    @MockBean
     private GetCredentialIssuerMetadataWorkflow getCredentialIssuerMetadataWorkflow;
 
     @Test
@@ -36,7 +40,7 @@ class CredentialIssuerMetadataControllerTest {
         // Arrange
         CredentialIssuerMetadata expectedCredentialIssuerMetadata = CredentialIssuerMetadata.builder()
                 .credentialIssuer("https://issuer.example.com")
-                .credentialIssuer("https://issuer.example.com/vci/v1/issuances")
+                .issuanceEndpoint("https://issuer.example.com/vci/v1/issuances")
                 .credentialEndpoint("https://issuer.example.com/oid4vci/v1/credential")
                 .deferredCredentialEndpoint("https://issuer.example.com/oid4vci/v1/deferred-credential")
                 .credentialConfigurationsSupported(Map.of(
