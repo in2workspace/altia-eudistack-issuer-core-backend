@@ -29,7 +29,6 @@ import java.util.UUID;
 
 import static es.in2.issuer.backend.backoffice.domain.util.Constants.LEAR_CREDENTIAL_EMPLOYEE_DESCRIPTION;
 import static es.in2.issuer.backend.shared.domain.util.Constants.*;
-import static es.in2.issuer.backend.shared.domain.util.Utils.generateCustomNonce;
 
 @Slf4j
 @Component
@@ -38,7 +37,6 @@ public class LEARCredentialEmployeeFactory {
 
     private final ObjectMapper objectMapper;
     private final IssuerFactory issuerFactory;
-    private final AppConfig appConfig;
 
     public Mono<String> bindCryptographicCredentialSubjectId(String decodedCredentialString, String subjectDid) {
         log.info("[BIND] called bindCryptographicCredentialSubjectId subjectDid={}", subjectDid);
