@@ -171,7 +171,7 @@ jobs:
           TAG="v${VERSION}-core"
 
           DH_IMAGE="docker.io/${DOCKERHUB_ORG}/${PROJECT_NAME}:${TAG}"
-          DH_LATEST="docker.io/${DOCKERHUB_ORG}/${PROJECT_NAME}:latest"
+          DH_LATEST="docker.io/${DOCKERHUB_ORG}/${PROJECT_NAME}:latest-core"
           
           ECR_IMAGE="${ECR_REGISTRY}/${ECR_REPOSITORY}:${TAG}"                    
           ECR_LATEST="${ECR_REGISTRY}/${ECR_REPOSITORY}:latest-core"
