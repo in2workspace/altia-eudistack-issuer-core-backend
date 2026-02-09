@@ -89,11 +89,10 @@ jobs:
           ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
         run: |
           set -euo pipefail
-          TAG="v${VERSION}${SNAPSHOT_SUFFIX}"
+          TAG="v${VERSION}${SNAPSHOT_SUFFIX}-core"
           
           DH_IMAGE="docker.io/${DOCKERHUB_ORG}/${PROJECT_NAME}:${TAG}"
-          ECR_REPOSITORY_CORE="${ECR_REPOSITORY}-core"
-          ECR_IMAGE="${ECR_REGISTRY}/${ECR_REPOSITORY_CORE}:${TAG}"
+          ECR_IMAGE="${ECR_REGISTRY}/${ECR_REPOSITORY}:${TAG}"
           
           docker build -f Dockerfile --build-arg SKIP_TESTS=true -t "${DH_IMAGE}" .
           docker tag "${DH_IMAGE}" "${ECR_IMAGE}"
@@ -169,14 +168,13 @@ jobs:
           ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
         run: |
           set -euo pipefail
-          TAG="v${VERSION}"
+          TAG="v${VERSION}-core"
 
           DH_IMAGE="docker.io/${DOCKERHUB_ORG}/${PROJECT_NAME}:${TAG}"
           DH_LATEST="docker.io/${DOCKERHUB_ORG}/${PROJECT_NAME}:latest"
           
-          ECR_REPOSITORY_CORE="${ECR_REPOSITORY}-core"
-          ECR_IMAGE="${ECR_REGISTRY}/${ECR_REPOSITORY_CORE}:${TAG}"                    
-          ECR_LATEST="${ECR_REGISTRY}/${ECR_REPOSITORY_CORE}:latest"
+          ECR_IMAGE="${ECR_REGISTRY}/${ECR_REPOSITORY}:${TAG}"                    
+          ECR_LATEST="${ECR_REGISTRY}/${ECR_REPOSITORY}:latest-core"
 
           docker build -f Dockerfile --build-arg SKIP_TESTS=true -t "${DH_IMAGE}" .
           docker tag "${DH_IMAGE}" "${DH_LATEST}"
