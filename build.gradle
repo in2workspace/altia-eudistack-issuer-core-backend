@@ -38,7 +38,7 @@ checkstyleTest {
 sonar {
     properties {
         property "sonar.projectName", "EUDIStack Issuer Core Backend"
-        property "sonar.projectKey", "in2workspace_in2-issuer-api"
+        property "sonar.projectKey", "in2workspace_altia-eudistack-issuer-core-backend"
         property "sonar.organization", "in2workspace"
         property "sonar.host.url", "https://sonarcloud.io"
         property "sonar.coverage.exclusions",
