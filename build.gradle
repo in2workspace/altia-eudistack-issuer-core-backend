@@ -102,6 +102,7 @@ dependencies {
     runtimeOnly 'org.postgresql:r2dbc-postgresql'
     runtimeOnly 'org.postgresql:postgresql'
     implementation 'org.flywaydb:flyway-core'
+    implementation 'org.flywaydb:flyway-database-postgresql:11.2.0'
 
     // In-Memory Persistence
     implementation 'com.google.guava:guava:33.2.1-jre'
@@ -156,7 +157,6 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-testcontainers'
     testImplementation 'org.testcontainers:junit-jupiter'
 
-    implementation "org.flywaydb:flyway-database-postgresql"
 }
 
 dependencyManagement {
