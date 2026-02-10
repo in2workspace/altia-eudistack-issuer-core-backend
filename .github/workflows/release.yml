@@ -118,32 +118,6 @@ jobs:
           java-version: '25'
           cache: 'gradle'
 
-      - name: Diagnose Gradle properties output
-        run: |
-          set -euo pipefail
-
-          echo "== Raw lines (show name/version with line numbers) =="
-          ./gradlew -q properties | nl -ba | sed -n '/name:/p;/version:/p'
-
-          echo
-          echo "== Show non-printable / escape chars around those lines =="
-          ./gradlew -q properties | sed -n '/name:/p;/version:/p' | cat -v
-
-          echo
-          echo "== Grep test (your current regex) =="
-          echo "name_match=$(./gradlew -q properties | grep '^name:' || true)"
-          echo "version_match=$(./gradlew -q properties | grep '^version:' || true)"
-          echo "name_match='$name_match'"
-          echo "version_match='$version_match'"
-
-          echo
-          echo "== Check for ANSI escape sequences (\\x1b[) =="
-          if ./gradlew -q properties | sed -n '/name:/p;/version:/p' | LC_ALL=C grep -q $'\x1b\['; then
-            echo "ANSI FOUND in name/version lines"
-          else
-            echo "No ANSI detected in name/version lines"
-          fi
-
       - name: Make Gradlew Executable
         run: chmod +x ./gradlew
 
