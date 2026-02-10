@@ -1,6 +1,6 @@
 plugins {
     id 'java'
-    id 'org.springframework.boot' version '3.2.0'
+    id 'org.springframework.boot' version '3.5.5'
     id 'io.spring.dependency-management' version '1.1.5'
     id 'jacoco'
     id 'org.sonarqube' version '7.2.2.6593'
@@ -15,11 +15,13 @@ group = 'es.in2'
 version = '2.2.14'
 
 java {
-    sourceCompatibility = '17'
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
 }
 
 jacoco {
-    toolVersion = "0.8.11"
+    toolVersion = "0.8.14"
 }
 
 checkstyle {
@@ -63,7 +65,7 @@ repositories {
 }
 
 ext {
-    set('springCloudVersion', "2023.0.0")
+    set('springCloudVersion', "2025.0.0")
 }
 
 dependencies {
@@ -73,8 +75,8 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.springframework.boot:spring-boot-starter-security'
     implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
-    implementation 'org.springframework.boot:spring-boot-starter-mail:3.3.0'
-    implementation 'org.springframework.boot:spring-boot-starter-thymeleaf:3.3.0'
+    implementation 'org.springframework.boot:spring-boot-starter-mail'
+    implementation 'org.springframework.boot:spring-boot-starter-thymeleaf'
     implementation 'org.springframework.vault:spring-vault-core:3.1.2'
 
     // JSON
@@ -143,14 +145,12 @@ dependencies {
     testImplementation 'org.springframework.security:spring-security-test'
     testImplementation 'io.projectreactor:reactor-test'
     testImplementation 'org.springframework.boot:spring-boot-starter-aop'
-    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.10.2'
-    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.10.2'
     testImplementation 'io.projectreactor:reactor-test'
     testImplementation 'io.mockk:mockk:1.13.11'
     testImplementation 'org.mockito:mockito-inline:5.2.0'
     testImplementation 'com.squareup.okhttp3:mockwebserver:4.12.0'
     testImplementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.17.1'
-    testImplementation 'com.tngtech.archunit:archunit-junit5:1.4.0'
+    testImplementation 'com.tngtech.archunit:archunit-junit5:1.4.1'
 
     // Integration Test
     testImplementation 'org.springframework.boot:spring-boot-testcontainers'
