@@ -155,6 +155,8 @@ dependencies {
     // Integration Test
     testImplementation 'org.springframework.boot:spring-boot-testcontainers'
     testImplementation 'org.testcontainers:junit-jupiter'
+
+    implementation "org.flywaydb:flyway-database-postgresql"
 }
 
 dependencyManagement {
