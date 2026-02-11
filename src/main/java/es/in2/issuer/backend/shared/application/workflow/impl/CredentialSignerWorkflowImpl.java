@@ -142,7 +142,7 @@ public class CredentialSignerWorkflowImpl implements CredentialSignerWorkflow {
             } else if (format.equals(CWT_VC)) {
                 log.info(unsignedCredential);
                 return generateCborFromJson(unsignedCredential)
-                        .flatMap(cbor -> SignCOSEFromCBOR(cbor, token, email, procedureId))
+                        .flatMap(cbor -> signCOSEFromCBOR(cbor, token, email, procedureId))
                         .flatMap(this::compressAndConvertToBase45FromCOSE);
             } else {
                 return Mono.error(new IllegalArgumentException("Unsupported credential format: " + format));
@@ -224,10 +224,10 @@ public class CredentialSignerWorkflowImpl implements CredentialSignerWorkflow {
      * @param token Authentication token
      * @return Mono emitting COSE bytes
      */
-    private Mono<byte[]> SignCOSEFromCBOR(byte[] cbor, String token, String email, String procedureId) {
+    private Mono<byte[]> signCOSEFromCBOR(byte[] cbor, String token, String email, String procedureId) {
         log.info("Signing credential in COSE format remotely ...");
         String cborBase64 = Base64.getEncoder().encodeToString(cbor);
-        SigningRequest signingRequest = new SigningRequest (
+        SigningRequest signingRequest = new SigningRequest(
                 SigningType.COSE,
                 cborBase64,
                 new SigningContext(token, procedureId, email)

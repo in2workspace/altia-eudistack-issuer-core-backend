@@ -32,8 +32,9 @@ public class CscSignDocSigningProvider implements SigningProvider {
 
     @Override
     public Mono<SigningResult> sign(SigningRequest request) {
-        log.debug("Signing request received. type={}, procedureId={}", request.type(), request.context() != null ? request.context().procedureId() : "N/A");
         validate(request);
+
+        log.debug("Signing request received. type={}, procedureId={}", request.type(), request.context() != null ? request.context().procedureId() : "N/A");
 
         SignatureRequest legacyRequest = toLegacy(request);
 
