@@ -1,4 +1,4 @@
-package es.in2.issuer.backend.shared.infrastructure.signing.csc;
+package es.in2.issuer.backend.spi.infrastucture.csc;
 
 import es.in2.issuer.backend.shared.domain.model.dto.SignatureConfiguration;
 import es.in2.issuer.backend.shared.domain.model.dto.SignatureRequest;
