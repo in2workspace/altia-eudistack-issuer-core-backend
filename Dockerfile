@@ -1,5 +1,5 @@
 # temp build
-FROM docker.io/gradle:9.3.1 AS TEMP_BUILD
+FROM docker.io/gradle:9.3.1-jdk25 AS TEMP_BUILD
 ARG SKIP_TESTS=false
 COPY build.gradle settings.gradle /home/gradle/src/
 COPY src /home/gradle/src/src
