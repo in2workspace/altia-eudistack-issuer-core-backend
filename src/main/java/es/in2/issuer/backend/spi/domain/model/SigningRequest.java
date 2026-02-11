@@ -4,7 +4,6 @@ import java.util.Map;
 
 public record SigningRequest(
         SigningType type,
-        String payloadToSign,
-        Map<String, Object> options,
+        String data,
         SigningContext context
 ) {}

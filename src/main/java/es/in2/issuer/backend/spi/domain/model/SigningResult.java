@@ -1,3 +1,6 @@
 package es.in2.issuer.backend.spi.domain.model;
 
-public record SigningResult(String signedData) {}
+public record SigningResult(
+        SigningType type,
+        String data
+) {}
