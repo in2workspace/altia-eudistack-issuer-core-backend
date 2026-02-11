@@ -55,7 +55,7 @@ public class CredentialSignerWorkflowImpl implements CredentialSignerWorkflow {
     private final BackofficePdpService backofficePdpService;
     private final ObjectMapper objectMapper;
     private final DeferredCredentialWorkflow deferredCredentialWorkflow;
-    private final RemoteSignatureService remoteSignatureService;
+    //private final RemoteSignatureService remoteSignatureService;
     private final LEARCredentialEmployeeFactory learCredentialEmployeeFactory;
     private final LEARCredentialMachineFactory learCredentialMachineFactory;
     private final LabelCredentialFactory labelCredentialFactory;
