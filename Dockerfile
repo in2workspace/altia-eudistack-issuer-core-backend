@@ -1,5 +1,5 @@
 # temp build
-FROM docker.io/gradle:8.4.0 AS TEMP_BUILD
+FROM docker.io/gradle:9.3.1-jdk25 AS TEMP_BUILD
 ARG SKIP_TESTS=false
 COPY build.gradle settings.gradle /home/gradle/src/
 COPY src /home/gradle/src/src
@@ -13,7 +13,7 @@ RUN if [ "$SKIP_TESTS" = "true" ]; then \
   fi
 
 # build image
-FROM eclipse-temurin:17-jdk-alpine
+FROM eclipse-temurin:25-jdk-alpine
 RUN addgroup -S nonroot \
     && adduser -S nonroot -G nonroot
 USER nonroot
