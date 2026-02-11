@@ -116,6 +116,7 @@ dependencies {
 
     // Nimbus JWT
     implementation 'com.nimbusds:nimbus-jose-jwt:9.40'
+    implementation "com.nimbusds:oauth2-oidc-sdk:11.21.1"
     implementation 'io.jsonwebtoken:jjwt-api:0.12.5'
     runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.5'
     runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.5'
@@ -125,10 +126,11 @@ dependencies {
 
 
     // AZURE
-    implementation('com.azure.spring:spring-cloud-azure-starter-appconfiguration')
-    implementation('com.azure.spring:spring-cloud-azure-starter-keyvault-secrets:6.1.0')
+    implementation "com.azure.spring:spring-cloud-azure-starter-appconfiguration:6.1.0"
+    implementation "com.azure.spring:spring-cloud-azure-starter-keyvault-secrets:6.1.0"
 
     // Documentation
+
     implementation 'org.springdoc:springdoc-openapi-starter-webflux-ui:2.5.0'
 
     // Logback
