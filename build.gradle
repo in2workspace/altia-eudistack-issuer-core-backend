@@ -126,7 +126,7 @@ dependencies {
 
     // AZURE
     implementation('com.azure.spring:spring-cloud-azure-starter-appconfiguration')
-    implementation('com.azure.spring:spring-cloud-azure-starter-keyvault-secrets')
+    implementation('com.azure.spring:spring-cloud-azure-starter-keyvault-secrets:6.1.0')
 
     // Documentation
     implementation 'org.springdoc:springdoc-openapi-starter-webflux-ui:2.5.0'
