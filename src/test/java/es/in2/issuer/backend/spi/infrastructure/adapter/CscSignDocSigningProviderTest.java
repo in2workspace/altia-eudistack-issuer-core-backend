@@ -1,4 +1,4 @@
-package es.in2.issuer.backend.spi.adapter;
+package es.in2.issuer.backend.spi.infrastructure.adapter;
 import es.in2.issuer.backend.shared.domain.model.dto.SignatureRequest;
 import es.in2.issuer.backend.shared.domain.model.dto.SignedData;
 import es.in2.issuer.backend.shared.domain.model.enums.SignatureType;
