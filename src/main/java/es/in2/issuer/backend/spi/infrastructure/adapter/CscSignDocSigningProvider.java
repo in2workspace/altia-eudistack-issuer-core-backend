@@ -1,8 +1,7 @@
-package es.in2.issuer.backend.spi.infrastructure.csc;
+package es.in2.issuer.backend.spi.infrastructure.adapter;
 
 import es.in2.issuer.backend.shared.domain.model.dto.SignatureConfiguration;
 import es.in2.issuer.backend.shared.domain.model.dto.SignatureRequest;
-import es.in2.issuer.backend.shared.domain.model.dto.SignedData;
 import es.in2.issuer.backend.shared.domain.model.enums.SignatureType;
 import es.in2.issuer.backend.shared.domain.service.RemoteSignatureService;
 import es.in2.issuer.backend.spi.domain.exception.SigningException;
@@ -36,14 +35,14 @@ public class CscSignDocSigningProvider implements SigningProvider {
             try {
                 validate(request);
 
-                log.debug("Signing request received. type={}, procedureId={}", request.type(), request.context() != null ? request.context().procedureId() : "N/A");
-
                 SignatureRequest legacyRequest = toLegacy(request);
 
                 SigningContext ctx = request.context();
                 String token = ctx.token();
                 String procedureId = ctx.procedureId();
                 String email = ctx.email();
+
+                log.debug("Signing request received. type={}, procedureId={}", request.type(), request.context().procedureId());
 
                 return remoteSignatureService
                         .signIssuedCredential(legacyRequest, token, procedureId != null ? procedureId : "", email)
