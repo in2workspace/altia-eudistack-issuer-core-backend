@@ -8,10 +8,11 @@ import es.in2.issuer.backend.spi.domain.exception.SigningException;
 import es.in2.issuer.backend.spi.domain.model.SigningContext;
 import es.in2.issuer.backend.spi.domain.model.SigningRequest;
 import es.in2.issuer.backend.spi.domain.model.SigningType;
-import es.in2.issuer.backend.spi.infrastructure.adapter.CscSignDocSigningProvider;
 
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -24,7 +25,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-public class CscSignDocSigningProviderTest {
+class CscSignDocSigningProviderTest {
     @Mock
     private RemoteSignatureService remoteSignatureService;
 
@@ -40,8 +41,8 @@ public class CscSignDocSigningProviderTest {
                 .thenReturn(Mono.just(signedData));
         StepVerifier.create(cscSignDocSigningProvider.sign(request))
                 .assertNext(result -> {
-                    assertThat(SigningType.JADES).isEqualTo(result.type());
-                    assertThat("signedData").isEqualTo(result.data());
+                    assertThat(result.type()).isEqualTo(SigningType.JADES);
+                    assertThat(result.data()).isEqualTo("signedData");
                 })
                 .verifyComplete();
     }
@@ -63,44 +64,8 @@ public class CscSignDocSigningProviderTest {
     }
 
     @Test
-    void signThrowsSigningExceptionOnNullData() {
-        SigningContext context = new SigningContext("token", "procedureId", "email@example.com");
-        SigningRequest request = new SigningRequest(SigningType.JADES, null, context);
-        StepVerifier.create(cscSignDocSigningProvider.sign(request))
-                .expectError(SigningException.class)
-                .verify();
-    }
-
-    @Test
-    void signThrowsSigningExceptionOnBlankData() {
-        SigningContext context = new SigningContext("token", "procedureId", "email@example.com");
-        SigningRequest request = new SigningRequest(SigningType.JADES, "   ", context);
-        StepVerifier.create(cscSignDocSigningProvider.sign(request))
-                .expectError(SigningException.class)
-                .verify();
-    }
-
-    @Test
     void signThrowsSigningExceptionOnNullContext() {
         SigningRequest request = new SigningRequest(SigningType.JADES, "data", null);
-        StepVerifier.create(cscSignDocSigningProvider.sign(request))
-                .expectError(SigningException.class)
-                .verify();
-    }
-
-    @Test
-    void signThrowsSigningExceptionOnNullToken() {
-        SigningContext context = new SigningContext(null, "procedureId", "email@example.com");
-        SigningRequest request = new SigningRequest(SigningType.JADES, "data", context);
-        StepVerifier.create(cscSignDocSigningProvider.sign(request))
-                .expectError(SigningException.class)
-                .verify();
-    }
-
-    @Test
-    void signThrowsSigningExceptionOnBlankToken() {
-        SigningContext context = new SigningContext("   ", "procedureId", "email@example.com");
-        SigningRequest request = new SigningRequest(SigningType.JADES, "data", context);
         StepVerifier.create(cscSignDocSigningProvider.sign(request))
                 .expectError(SigningException.class)
                 .verify();
@@ -112,6 +77,28 @@ public class CscSignDocSigningProviderTest {
         SigningRequest request = new SigningRequest(SigningType.JADES, "data", context);
         when(remoteSignatureService.signIssuedCredential(any(SignatureRequest.class), eq("token"), eq("procedureId"), eq("email@example.com")))
                 .thenReturn(Mono.error(new RuntimeException("remote error")));
+        StepVerifier.create(cscSignDocSigningProvider.sign(request))
+                .expectError(SigningException.class)
+                .verify();
+    }
+
+
+    private static Object[][] invalidRequests() {
+        SigningContext validContext = new SigningContext("token", "procedureId", "email@example.com");
+        return new Object[][]{
+                {null, "Null request"},
+                {new SigningRequest(null, "data", validContext), "Null type"},
+                {new SigningRequest(SigningType.JADES, null, validContext), "Null data"},
+                {new SigningRequest(SigningType.JADES, "   ", validContext), "Blank data"},
+                {new SigningRequest(SigningType.JADES, "data", null), "Null context"},
+                {new SigningRequest(SigningType.JADES, "data", new SigningContext(null, "procedureId", "email@example.com")), "Null token"},
+                {new SigningRequest(SigningType.JADES, "data", new SigningContext("   ", "procedureId", "email@example.com")), "Blank token"}
+        };
+    }
+
+    @ParameterizedTest(name = "{index}: {1}")
+    @MethodSource("invalidRequests")
+    void signThrowsSigningExceptionOnInvalidRequest(SigningRequest request, String description) {
         StepVerifier.create(cscSignDocSigningProvider.sign(request))
                 .expectError(SigningException.class)
                 .verify();

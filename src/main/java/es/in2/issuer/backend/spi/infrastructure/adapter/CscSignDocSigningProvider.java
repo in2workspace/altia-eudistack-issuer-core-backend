@@ -32,29 +32,25 @@ public class CscSignDocSigningProvider implements SigningProvider {
     @Override
     public Mono<SigningResult> sign(SigningRequest request) {
         return Mono.defer(() -> {
-            try {
-                validate(request);
+            validate(request);
 
-                SignatureRequest legacyRequest = toLegacy(request);
+            SignatureRequest legacyRequest = toLegacy(request);
 
-                SigningContext ctx = request.context();
-                String token = ctx.token();
-                String procedureId = ctx.procedureId();
-                String email = ctx.email();
+            SigningContext ctx = request.context();
+            String token = ctx.token();
+            String procedureId = ctx.procedureId();
+            String email = ctx.email();
 
-                log.debug("Signing request received. type={}, procedureId={}", request.type(), request.context().procedureId());
+            log.debug("Signing request received. type={}, procedureId={}", request.type(), request.context().procedureId());
 
-                return remoteSignatureService
-                        .signIssuedCredential(legacyRequest, token, procedureId != null ? procedureId : "", email)
-                        .map(signedData -> new SigningResult(mapSigningType(signedData.type()), signedData.data()))
-                        .onErrorMap(ex -> {
-                            log.error("CSC signDoc provider failed. type={}, procedureId={}, reason={}",
-                                    request.type(), procedureId, ex.getMessage(), ex);
-                            return new SigningException("Signing failed via CSC signDoc provider: " + ex.getMessage(), ex);
-                        });
-            } catch (SigningException ex) {
-                return Mono.error(ex);
-            }
+            return remoteSignatureService
+                .signIssuedCredential(legacyRequest, token, procedureId, email)
+                .map(signedData -> new SigningResult(mapSigningType(signedData.type()), signedData.data()))
+                .onErrorMap(ex -> {
+                    log.error("CSC signDoc provider failed. type={}, procedureId={}, reason={}",
+                            request.type(), procedureId, ex.getMessage(), ex);
+                    return new SigningException("Signing failed via CSC signDoc provider: " + ex.getMessage(), ex);
+                });
         });
     }
 
