@@ -1,4 +1,4 @@
-package es.in2.issuer.backend.spi.infrastucture.csc;
+package es.in2.issuer.backend.spi.infrastructure.csc;
 
 import es.in2.issuer.backend.shared.domain.model.dto.SignatureConfiguration;
 import es.in2.issuer.backend.shared.domain.model.dto.SignatureRequest;
@@ -32,26 +32,38 @@ public class CscSignDocSigningProvider implements SigningProvider {
 
     @Override
     public Mono<SigningResult> sign(SigningRequest request) {
-        validate(request);
+        return Mono.defer(() -> {
+            try {
+                validate(request);
 
-        log.debug("Signing request received. type={}, procedureId={}", request.type(), request.context() != null ? request.context().procedureId() : "N/A");
+                log.debug("Signing request received. type={}, procedureId={}", request.type(), request.context() != null ? request.context().procedureId() : "N/A");
 
-        SignatureRequest legacyRequest = toLegacy(request);
+                SignatureRequest legacyRequest = toLegacy(request);
 
-        SigningContext ctx = request.context();
-        String token = ctx.token();
-        String procedureId = ctx.procedureId();
-        String email = ctx.email();
+                SigningContext ctx = request.context();
+                String token = ctx.token();
+                String procedureId = ctx.procedureId();
+                String email = ctx.email();
 
-        return remoteSignatureService
-                .signIssuedCredential(legacyRequest, token, procedureId != null ? procedureId : "", email)
-                .map(SignedData::data)
-                .map(signed -> new SigningResult(request.type(), signed))
-                .onErrorMap(ex -> {
-                    log.error("CSC signDoc provider failed. type={}, procedureId={}, reason={}",
-                            request.type(), procedureId, ex.getMessage(), ex);
-                    return new SigningException("Signing failed via CSC signDoc provider: " + ex.getMessage(), ex);
-                });
+                return remoteSignatureService
+                        .signIssuedCredential(legacyRequest, token, procedureId != null ? procedureId : "", email)
+                        .map(signedData -> new SigningResult(mapSigningType(signedData.type()), signedData.data()))
+                        .onErrorMap(ex -> {
+                            log.error("CSC signDoc provider failed. type={}, procedureId={}, reason={}",
+                                    request.type(), procedureId, ex.getMessage(), ex);
+                            return new SigningException("Signing failed via CSC signDoc provider: " + ex.getMessage(), ex);
+                        });
+            } catch (SigningException ex) {
+                return Mono.error(ex);
+            }
+        });
+    }
+
+    private SigningType mapSigningType(SignatureType type) {
+        return switch (type) {
+            case JADES -> SigningType.JADES;
+            case COSE -> SigningType.COSE;
+        };
     }
 
     private SignatureRequest toLegacy(SigningRequest request) {
