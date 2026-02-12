@@ -12,21 +12,22 @@ import es.in2.issuer.backend.shared.application.workflow.DeferredCredentialWorkf
 import es.in2.issuer.backend.shared.domain.exception.Base45Exception;
 import es.in2.issuer.backend.shared.domain.exception.CredentialProcedureInvalidStatusException;
 import es.in2.issuer.backend.shared.domain.exception.CredentialProcedureNotFoundException;
-import es.in2.issuer.backend.shared.domain.model.dto.SignatureConfiguration;
-import es.in2.issuer.backend.shared.domain.model.dto.SignatureRequest;
 import es.in2.issuer.backend.shared.domain.model.dto.SignedCredentials;
-import es.in2.issuer.backend.shared.domain.model.dto.SignedData;
 import es.in2.issuer.backend.shared.domain.model.dto.credential.LabelCredential;
 import es.in2.issuer.backend.shared.domain.model.dto.credential.lear.employee.LEARCredentialEmployee;
 import es.in2.issuer.backend.shared.domain.model.dto.credential.lear.machine.LEARCredentialMachine;
 import es.in2.issuer.backend.shared.domain.model.enums.CredentialStatusEnum;
-import es.in2.issuer.backend.shared.domain.model.enums.SignatureType;
 import es.in2.issuer.backend.shared.domain.service.*;
 import es.in2.issuer.backend.shared.domain.util.factory.IssuerFactory;
 import es.in2.issuer.backend.shared.domain.util.factory.LEARCredentialEmployeeFactory;
 import es.in2.issuer.backend.shared.domain.util.factory.LEARCredentialMachineFactory;
 import es.in2.issuer.backend.shared.domain.util.factory.LabelCredentialFactory;
 import es.in2.issuer.backend.shared.infrastructure.repository.CredentialProcedureRepository;
+import es.in2.issuer.backend.spi.domain.model.SigningContext;
+import es.in2.issuer.backend.spi.domain.model.SigningRequest;
+import es.in2.issuer.backend.spi.domain.model.SigningResult;
+import es.in2.issuer.backend.spi.domain.model.SigningType;
+import es.in2.issuer.backend.spi.domain.signing.SigningProvider;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import nl.minvws.encoding.Base45;
@@ -38,7 +39,6 @@ import reactor.core.scheduler.Schedulers;
 
 import java.io.ByteArrayOutputStream;
 import java.util.Base64;
-import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
@@ -55,7 +55,7 @@ public class CredentialSignerWorkflowImpl implements CredentialSignerWorkflow {
     private final BackofficePdpService backofficePdpService;
     private final ObjectMapper objectMapper;
     private final DeferredCredentialWorkflow deferredCredentialWorkflow;
-    private final RemoteSignatureService remoteSignatureService;
+    private final SigningProvider signingProvider;
     private final LEARCredentialEmployeeFactory learCredentialEmployeeFactory;
     private final LEARCredentialMachineFactory learCredentialMachineFactory;
     private final LabelCredentialFactory labelCredentialFactory;
@@ -129,20 +129,20 @@ public class CredentialSignerWorkflowImpl implements CredentialSignerWorkflow {
                 return setSubIfCredentialSubjectIdPresent(unsignedCredential)
                         .flatMap(payloadToSign -> {
                             log.info("Signing credential in JADES remotely ...");
-                            SignatureRequest signatureRequest = new SignatureRequest(
-                                    new SignatureConfiguration(SignatureType.JADES, Collections.emptyMap()),
-                                    payloadToSign
+                            SigningRequest signingRequest = new SigningRequest(
+                                    SigningType.JADES,
+                                    payloadToSign,
+                                    new SigningContext(token, procedureId, email)
                             );
 
-                            return remoteSignatureService.signIssuedCredential(signatureRequest, token, procedureId, email)
-                                    .publishOn(Schedulers.boundedElastic())
-                                    .map(SignedData::data);
+                            return signingProvider.sign(signingRequest)
+                                    .map(SigningResult::data);
                         });
 
             } else if (format.equals(CWT_VC)) {
                 log.info(unsignedCredential);
                 return generateCborFromJson(unsignedCredential)
-                        .flatMap(cbor -> generateCOSEBytesFromCBOR(cbor, token, email))
+                        .flatMap(cbor -> generateCOSEBytesFromCBOR(cbor, token, email, procedureId))
                         .flatMap(this::compressAndConvertToBase45FromCOSE);
             } else {
                 return Mono.error(new IllegalArgumentException("Unsupported credential format: " + format));
@@ -224,14 +224,17 @@ public class CredentialSignerWorkflowImpl implements CredentialSignerWorkflow {
      * @param token Authentication token
      * @return Mono emitting COSE bytes
      */
-    private Mono<byte[]> generateCOSEBytesFromCBOR(byte[] cbor, String token, String email) {
+    private Mono<byte[]> generateCOSEBytesFromCBOR(byte[] cbor, String token, String email, String procedureId) {
         log.info("Signing credential in COSE format remotely ...");
         String cborBase64 = Base64.getEncoder().encodeToString(cbor);
-        SignatureRequest signatureRequest = new SignatureRequest(
-                new SignatureConfiguration(SignatureType.COSE, Collections.emptyMap()),
-                cborBase64
+        SigningRequest signingRequest = new SigningRequest(
+                SigningType.COSE,
+                cborBase64,
+                new SigningContext(token, procedureId, email)
         );
-        return remoteSignatureService.signIssuedCredential(signatureRequest, token, "", email).map(signedData -> Base64.getDecoder().decode(signedData.data()));
+        return signingProvider.sign(signingRequest)
+                .map(SigningResult::data)
+                .map(Base64.getDecoder()::decode);
     }
 
     /**
