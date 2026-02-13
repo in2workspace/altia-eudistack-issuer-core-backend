@@ -10,6 +10,7 @@ import es.in2.issuer.backend.spi.domain.model.SigningRequest;
 import es.in2.issuer.backend.spi.domain.model.SigningResult;
 import es.in2.issuer.backend.spi.domain.model.SigningType;
 import es.in2.issuer.backend.spi.domain.signing.SigningProvider;
+import es.in2.issuer.backend.spi.domain.signing.SigningRequestValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -32,7 +33,7 @@ public class CscSignDocSigningProvider implements SigningProvider {
     @Override
     public Mono<SigningResult> sign(SigningRequest request) {
         return Mono.defer(() -> {
-            validate(request);
+            SigningRequestValidator.validate(request);
 
             SignatureRequest legacyRequest = toLegacy(request);
 
