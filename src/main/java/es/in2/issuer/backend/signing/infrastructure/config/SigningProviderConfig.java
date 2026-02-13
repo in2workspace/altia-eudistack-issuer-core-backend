@@ -1,8 +1,8 @@
-package es.in2.issuer.backend.spi.infrastructure.config;
+package es.in2.issuer.backend.signing.infrastructure.config;
 
-import es.in2.issuer.backend.spi.domain.signing.SigningProvider;
-import es.in2.issuer.backend.spi.infrastructure.adapter.CscSignDocSigningProvider;
-import es.in2.issuer.backend.spi.infrastructure.adapter.InMemorySigningProvider;
+import es.in2.issuer.backend.signing.domain.spi.SigningProvider;
+import es.in2.issuer.backend.signing.infrastructure.adapter.CscSignDocSigningProvider;
+import es.in2.issuer.backend.signing.infrastructure.adapter.InMemorySigningProvider;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;

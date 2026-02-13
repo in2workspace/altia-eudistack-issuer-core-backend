@@ -18,10 +18,10 @@ import es.in2.issuer.backend.shared.domain.util.factory.LEARCredentialMachineFac
 import es.in2.issuer.backend.shared.domain.util.factory.LabelCredentialFactory;
 import es.in2.issuer.backend.shared.infrastructure.config.AppConfig;
 import es.in2.issuer.backend.shared.infrastructure.repository.CredentialProcedureRepository;
-import es.in2.issuer.backend.spi.domain.model.SigningRequest;
-import es.in2.issuer.backend.spi.domain.model.SigningResult;
-import es.in2.issuer.backend.spi.domain.model.SigningType;
-import es.in2.issuer.backend.spi.domain.signing.SigningProvider;
+import es.in2.issuer.backend.signing.domain.model.SigningRequest;
+import es.in2.issuer.backend.signing.domain.model.SigningResult;
+import es.in2.issuer.backend.signing.domain.model.SigningType;
+import es.in2.issuer.backend.signing.domain.spi.SigningProvider;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;

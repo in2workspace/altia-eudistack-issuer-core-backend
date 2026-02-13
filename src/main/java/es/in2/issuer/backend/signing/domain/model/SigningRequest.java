@@ -1,4 +1,4 @@
-package es.in2.issuer.backend.spi.domain.model;
+package es.in2.issuer.backend.signing.domain.model;
 
 public record SigningRequest(
         SigningType type,

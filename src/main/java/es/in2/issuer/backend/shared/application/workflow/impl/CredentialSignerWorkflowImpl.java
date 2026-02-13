@@ -23,11 +23,11 @@ import es.in2.issuer.backend.shared.domain.util.factory.LEARCredentialEmployeeFa
 import es.in2.issuer.backend.shared.domain.util.factory.LEARCredentialMachineFactory;
 import es.in2.issuer.backend.shared.domain.util.factory.LabelCredentialFactory;
 import es.in2.issuer.backend.shared.infrastructure.repository.CredentialProcedureRepository;
-import es.in2.issuer.backend.spi.domain.model.SigningContext;
-import es.in2.issuer.backend.spi.domain.model.SigningRequest;
-import es.in2.issuer.backend.spi.domain.model.SigningResult;
-import es.in2.issuer.backend.spi.domain.model.SigningType;
-import es.in2.issuer.backend.spi.domain.signing.SigningProvider;
+import es.in2.issuer.backend.signing.domain.model.SigningContext;
+import es.in2.issuer.backend.signing.domain.model.SigningRequest;
+import es.in2.issuer.backend.signing.domain.model.SigningResult;
+import es.in2.issuer.backend.signing.domain.model.SigningType;
+import es.in2.issuer.backend.signing.domain.spi.SigningProvider;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import nl.minvws.encoding.Base45;

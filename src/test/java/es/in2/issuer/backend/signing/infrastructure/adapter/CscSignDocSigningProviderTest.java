@@ -1,13 +1,13 @@
-package es.in2.issuer.backend.spi.infrastructure.adapter;
+package es.in2.issuer.backend.signing.infrastructure.adapter;
 import es.in2.issuer.backend.shared.domain.model.dto.SignatureRequest;
 import es.in2.issuer.backend.shared.domain.model.dto.SignedData;
 import es.in2.issuer.backend.shared.domain.model.enums.SignatureType;
 import es.in2.issuer.backend.shared.domain.service.RemoteSignatureService;
 
-import es.in2.issuer.backend.spi.domain.exception.SigningException;
-import es.in2.issuer.backend.spi.domain.model.SigningContext;
-import es.in2.issuer.backend.spi.domain.model.SigningRequest;
-import es.in2.issuer.backend.spi.domain.model.SigningType;
+import es.in2.issuer.backend.signing.domain.exception.SigningException;
+import es.in2.issuer.backend.signing.domain.model.SigningContext;
+import es.in2.issuer.backend.signing.domain.model.SigningRequest;
+import es.in2.issuer.backend.signing.domain.model.SigningType;
 
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.Test;

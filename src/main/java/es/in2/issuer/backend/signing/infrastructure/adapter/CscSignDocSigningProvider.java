@@ -1,16 +1,16 @@
-package es.in2.issuer.backend.spi.infrastructure.adapter;
+package es.in2.issuer.backend.signing.infrastructure.adapter;
 
 import es.in2.issuer.backend.shared.domain.model.dto.SignatureConfiguration;
 import es.in2.issuer.backend.shared.domain.model.dto.SignatureRequest;
 import es.in2.issuer.backend.shared.domain.model.enums.SignatureType;
 import es.in2.issuer.backend.shared.domain.service.RemoteSignatureService;
-import es.in2.issuer.backend.spi.domain.exception.SigningException;
-import es.in2.issuer.backend.spi.domain.model.SigningContext;
-import es.in2.issuer.backend.spi.domain.model.SigningRequest;
-import es.in2.issuer.backend.spi.domain.model.SigningResult;
-import es.in2.issuer.backend.spi.domain.model.SigningType;
-import es.in2.issuer.backend.spi.domain.signing.SigningProvider;
-import es.in2.issuer.backend.spi.domain.signing.SigningRequestValidator;
+import es.in2.issuer.backend.signing.domain.exception.SigningException;
+import es.in2.issuer.backend.signing.domain.model.SigningContext;
+import es.in2.issuer.backend.signing.domain.model.SigningRequest;
+import es.in2.issuer.backend.signing.domain.model.SigningResult;
+import es.in2.issuer.backend.signing.domain.model.SigningType;
+import es.in2.issuer.backend.signing.domain.spi.SigningProvider;
+import es.in2.issuer.backend.signing.domain.spi.SigningRequestValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
