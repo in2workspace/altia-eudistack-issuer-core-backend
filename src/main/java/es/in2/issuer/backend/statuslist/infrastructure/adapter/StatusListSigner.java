@@ -7,7 +7,12 @@ import es.in2.issuer.backend.shared.domain.model.dto.SignatureConfiguration;
 import es.in2.issuer.backend.shared.domain.model.dto.SignatureRequest;
 import es.in2.issuer.backend.shared.domain.model.dto.SignedData;
 import es.in2.issuer.backend.shared.domain.model.enums.SignatureType;
-import es.in2.issuer.backend.shared.domain.service.RemoteSignatureService;
+import es.in2.issuer.backend.signing.domain.exception.SigningException;
+import es.in2.issuer.backend.signing.domain.model.SigningContext;
+import es.in2.issuer.backend.signing.domain.model.SigningRequest;
+import es.in2.issuer.backend.signing.domain.model.SigningResult;
+import es.in2.issuer.backend.signing.domain.model.SigningType;
+import es.in2.issuer.backend.signing.domain.spi.SigningProvider;
 import es.in2.issuer.backend.statuslist.domain.exception.StatusListCredentialSerializationException;
 import es.in2.issuer.backend.statuslist.domain.spi.CredentialPayloadSigner;
 import lombok.RequiredArgsConstructor;
@@ -23,39 +28,29 @@ import static java.util.Collections.emptyMap;
 @Component
 public class StatusListSigner implements CredentialPayloadSigner {
 
-    private final RemoteSignatureService remoteSignatureService;
+    private final SigningProvider signingProvider;
     private final ObjectMapper objectMapper;
 
     public Mono<String> sign(Map<String, Object> payload, String token, Long listId) {
         requireNonNullParam(payload, "payload");
         requireNonNullParam(token, "token");
 
-        return toSignatureRequest(payload)
-                .flatMap(req -> remoteSignatureService.signSystemCredential(req, token))
-                .onErrorMap(ex -> new RemoteSignatureException("Remote signature failed; list ID: " + listId, ex))
-                .map(signedData -> extractJwt(signedData, listId));
+        return toJson(payload)
+                .flatMap(json -> {
+                    SigningRequest req = new SigningRequest(
+                            SigningType.JADES,
+                            json,
+                            new SigningContext(token, null, null)
+                    );
+
+                    return signingProvider.sign(req)
+                            .map(SigningResult::data);
+                })
+                .onErrorMap(ex -> new SigningException("StatusList signing failed; listId=" + listId, ex));
     }
 
-    private Mono<SignatureRequest> toSignatureRequest(Map<String, Object> payload) {
-        return Mono.fromCallable(() -> {
-            String json = objectMapper.writeValueAsString(payload);
-
-            SignatureConfiguration config = SignatureConfiguration.builder()
-                    .type(SignatureType.JADES)
-                    .parameters(emptyMap())
-                    .build();
-
-            return SignatureRequest.builder()
-                    .configuration(config)
-                    .data(json)
-                    .build();
-        }).onErrorMap(JsonProcessingException.class, StatusListCredentialSerializationException::new);
-    }
-
-    private String extractJwt(SignedData signedData, Long listId) {
-        if (signedData == null || signedData.data() == null || signedData.data().isBlank()) {
-            throw new RemoteSignatureException("Remote signer returned empty SignedData; list ID: " + listId);
-        }
-        return signedData.data();
+    private Mono<String> toJson(Map<String, Object> payload) {
+        return Mono.fromCallable(() -> objectMapper.writeValueAsString(payload))
+                .onErrorMap(JsonProcessingException.class, StatusListCredentialSerializationException::new);
     }
 }

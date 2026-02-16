@@ -3,12 +3,13 @@ package es.in2.issuer.backend.signing.infrastructure.adapter;
 import es.in2.issuer.backend.shared.domain.model.dto.SignatureConfiguration;
 import es.in2.issuer.backend.shared.domain.model.dto.SignatureRequest;
 import es.in2.issuer.backend.shared.domain.model.enums.SignatureType;
-import es.in2.issuer.backend.shared.domain.service.RemoteSignatureService;
+import es.in2.issuer.backend.shared.domain.service.impl.SigningRecoveryServiceImpl;
 import es.in2.issuer.backend.signing.domain.exception.SigningException;
 import es.in2.issuer.backend.signing.domain.model.SigningContext;
 import es.in2.issuer.backend.signing.domain.model.SigningRequest;
 import es.in2.issuer.backend.signing.domain.model.SigningResult;
 import es.in2.issuer.backend.signing.domain.model.SigningType;
+import es.in2.issuer.backend.signing.domain.service.RemoteSignatureService;
 import es.in2.issuer.backend.signing.domain.spi.SigningProvider;
 import es.in2.issuer.backend.signing.domain.spi.SigningRequestValidator;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +30,7 @@ import java.util.Collections;
 public class CscSignDocSigningProvider implements SigningProvider {
 
     private final RemoteSignatureService remoteSignatureService;
+    private final SigningRecoveryServiceImpl signingRecoveryService;
 
     @Override
     public Mono<SigningResult> sign(SigningRequest request) {
@@ -36,22 +38,35 @@ public class CscSignDocSigningProvider implements SigningProvider {
             SigningRequestValidator.validate(request);
 
             SignatureRequest legacyRequest = toLegacy(request);
-
             SigningContext ctx = request.context();
+
             String token = ctx.token();
             String procedureId = ctx.procedureId();
             String email = ctx.email();
 
-            log.debug("Signing request received. type={}, procedureId={}", request.type(), request.context().procedureId());
+            boolean isIssued = procedureId != null && !procedureId.isBlank();
 
-            return remoteSignatureService
-                .signIssuedCredential(legacyRequest, token, procedureId, email)
-                .map(signedData -> new SigningResult(mapSigningType(signedData.type()), signedData.data()))
-                .onErrorMap(ex -> {
-                    log.error("CSC signDoc provider failed. type={}, procedureId={}, reason={}",
-                            request.type(), procedureId, ex.getMessage(), ex);
-                    return new SigningException("Signing failed via CSC signDoc provider: " + ex.getMessage(), ex);
-                });
+            log.debug("Signing request received. type={}, issued={}, procedureId={}",
+                    request.type(), isIssued, procedureId);
+
+            Mono<es.in2.issuer.backend.shared.domain.model.dto.SignedData> signingMono =
+                    isIssued
+                            ? remoteSignatureService.signIssuedCredential(legacyRequest, token, procedureId, email)
+                            : remoteSignatureService.signSystemCredential(legacyRequest, token);
+
+            Mono<SigningResult> resultMono = signingMono
+                    .map(signedData -> new SigningResult(mapSigningType(signedData.type()), signedData.data()));
+
+            if (isIssued) {
+                resultMono = resultMono.onErrorResume(ex ->
+                        signingRecoveryService.handlePostRecoverError(procedureId, email)
+                                .then(Mono.error(ex))
+                );
+            }
+
+            return resultMono.onErrorMap(ex ->
+                    new SigningException("Signing failed via CSC signDoc provider: " + ex.getMessage(), ex)
+            );
         });
     }
 
@@ -68,25 +83,6 @@ public class CscSignDocSigningProvider implements SigningProvider {
                 new SignatureConfiguration(legacyType, Collections.emptyMap()),
                 request.data()
         );
-    }
-
-
-    private void validate(SigningRequest request) {
-        if (request == null) {
-            throw new SigningException("SigningRequest must not be null");
-        }
-        if (request.type() == null) {
-            throw new SigningException("SigningRequest.type must not be null");
-        }
-        if (request.data() == null || request.data().isBlank()) {
-            throw new SigningException("SigningRequest.data must not be null/blank");
-        }
-        if (request.context() == null) {
-            throw new SigningException("SigningRequest.context must not be null");
-        }
-        if (request.context().token() == null || request.context().token().isBlank()) {
-            throw new SigningException("SigningContext.token must not be null/blank");
-        }
     }
 
     private SignatureType mapType(SigningType type) {
