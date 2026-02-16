@@ -135,6 +135,27 @@ public class QtspIssuerServiceImpl implements QtspIssuerService {
         }
     }
 
+    @Override
+    public boolean isServerMode() {
+        return SIGNATURE_REMOTE_TYPE_SERVER.equals(remoteSignatureConfig.getRemoteSignatureType());
+    }
+
+    @Override
+    public Mono<DetailedIssuer> resolveRemoteDetailedIssuer() {
+        return validateCredentials()
+                .flatMap(valid -> {
+                    if (Boolean.FALSE.equals(valid)) {
+                        return Mono.error(new RemoteSignatureException("Credentials mismatch."));
+                    }
+
+                    return qtspAuthClient.requestAccessToken(null, SIGNATURE_REMOTE_SCOPE_SERVICE)
+                            .flatMap(token -> requestCertificateInfo(token, remoteSignatureConfig.getRemoteSignatureCredentialId()))
+                            .flatMap(this::extractIssuerFromCertificateInfo);
+
+                });
+    }
+
+
     private Mono<Boolean> validateCertificate(String accessToken) {
         credentialID = remoteSignatureConfig.getRemoteSignatureCredentialId();
         String credentialListEndpoint = remoteSignatureConfig.getRemoteSignatureDomain() + "/csc/v2/credentials/list";

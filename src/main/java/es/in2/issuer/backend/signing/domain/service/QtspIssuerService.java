@@ -7,4 +7,7 @@ public interface QtspIssuerService {
     Mono<Boolean> validateCredentials();
     Mono<String> requestCertificateInfo(String accessToken, String credentialID);
     Mono<DetailedIssuer> extractIssuerFromCertificateInfo(String certificateInfo);
+    boolean isServerMode();
+    Mono<DetailedIssuer> resolveRemoteDetailedIssuer();
+
 }
