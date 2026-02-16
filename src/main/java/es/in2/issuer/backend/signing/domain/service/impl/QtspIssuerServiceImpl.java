@@ -1,0 +1,197 @@
+package es.in2.issuer.backend.signing.domain.service.impl;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import es.in2.issuer.backend.shared.domain.exception.*;
+import es.in2.issuer.backend.shared.domain.model.dto.SignatureRequest;
+import es.in2.issuer.backend.shared.domain.model.dto.credential.DetailedIssuer;
+import es.in2.issuer.backend.shared.domain.util.HttpUtils;
+import es.in2.issuer.backend.signing.domain.service.QtspIssuerService;
+import es.in2.issuer.backend.signing.infrastructure.config.RemoteSignatureConfig;
+import es.in2.issuer.backend.signing.infrastructure.qtsp.auth.QtspAuthClient;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+
+import javax.naming.InvalidNameException;
+import javax.naming.ldap.LdapName;
+import javax.naming.ldap.Rdn;
+import java.io.ByteArrayInputStream;
+import java.nio.charset.StandardCharsets;
+import java.security.cert.CertificateFactory;
+import java.security.cert.X509Certificate;
+import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import static es.in2.issuer.backend.backoffice.domain.util.Constants.*;
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class QtspIssuerServiceImpl implements QtspIssuerService {
+
+    private final ObjectMapper objectMapper;
+    private final QtspAuthClient qtspAuthClient;
+    private final RemoteSignatureConfig remoteSignatureConfig;
+    private final HttpUtils httpUtils;
+    private final Map<String, Object> requestBody = new HashMap<>();
+    private final List<Map.Entry<String, String>> headers = new ArrayList<>();
+
+    private static final String CERTIFICATES = "certificates";
+    private static final String SERIALIZING_ERROR = "Error serializing request body to JSON";
+    
+    private String credentialID;
+    private String credentialPassword;
+
+    @Override
+    public Mono<Boolean> validateCredentials() {
+        SignatureRequest signatureRequest = SignatureRequest.builder().build();
+        return qtspAuthClient.requestAccessToken(signatureRequest, SIGNATURE_REMOTE_SCOPE_SERVICE)
+                .flatMap(this::validateCertificate);
+    }
+
+    @Override
+    public Mono<String> requestCertificateInfo(String accessToken, String credentialID) {
+        String credentialsInfoEndpoint = remoteSignatureConfig.getRemoteSignatureDomain() + "/csc/v2/credentials/info";
+        requestBody.clear();
+        requestBody.put(CREDENTIAL_ID, credentialID);
+        requestBody.put(CERTIFICATES, "chain");
+        requestBody.put("certInfo", "true");
+        requestBody.put("authInfo", "true");
+
+        String requestBodySignature;
+        try {
+            requestBodySignature = objectMapper.writeValueAsString(requestBody);
+        } catch (JsonProcessingException e) {
+            return Mono.error(new RuntimeException(SERIALIZING_ERROR, e));
+        }
+        headers.clear();
+        headers.add(new AbstractMap.SimpleEntry<>(HttpHeaders.AUTHORIZATION, BEARER_PREFIX + accessToken));
+        headers.add(new AbstractMap.SimpleEntry<>(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE));
+        return httpUtils.postRequest(credentialsInfoEndpoint, headers, requestBodySignature)
+                .doOnError(error -> log.error("Error sending credential to sign: {}", error.getMessage()));
+    }
+
+    @Override
+    public Mono<DetailedIssuer> extractIssuerFromCertificateInfo(String certificateInfo) {
+        try {
+            log.info("Starting extraction of issuer from certificate info");
+            JsonNode certificateInfoNode = objectMapper.readTree(certificateInfo);
+            String subjectDN = certificateInfoNode.get("cert").get("subjectDN").asText();
+            String serialNumber = certificateInfoNode.get("cert").get("serialNumber").asText();
+            LdapName ldapDN = new LdapName(subjectDN);
+            Map<String, String> dnAttributes = new HashMap<>();
+
+            for (Rdn rdn : ldapDN.getRdns()) {
+                dnAttributes.put(rdn.getType(), rdn.getValue().toString());
+            }
+            JsonNode certificatesArray = certificateInfoNode.get("cert").get(CERTIFICATES);
+
+            Mono<String> organizationIdentifierMono = (certificatesArray != null && certificatesArray.isArray())
+                    ? Flux.fromIterable(certificatesArray)
+                    .concatMap(certNode -> {
+                        String base64Cert = certNode.asText();
+                        byte[] decodedBytes = Base64.getDecoder().decode(base64Cert);
+                        String decodedCert = new String(decodedBytes, StandardCharsets.UTF_8);
+                        Pattern pattern = Pattern.compile("organizationIdentifier\\s*=\\s*([\\w\\-]+)");
+                        Matcher matcher = pattern.matcher(decodedCert);
+                        if (matcher.find()) {
+                            return Mono.just(matcher.group(1));
+                        } else {
+                            return extractOrgFromX509(decodedBytes);
+                        }
+                    })
+                    .next()
+                    : Mono.empty();
+
+            return organizationIdentifierMono
+                    .switchIfEmpty(Mono.error(new OrganizationIdentifierNotFoundException("organizationIdentifier not found in the certificate.")))
+                    .flatMap(orgId -> {
+                        if (orgId == null || orgId.isEmpty()) {
+                            return Mono.error(new OrganizationIdentifierNotFoundException("organizationIdentifier not found in the certificate."));
+                        }
+                        DetailedIssuer detailedIssuer = DetailedIssuer.builder()
+                                .id(DID_ELSI + orgId)
+                                .organizationIdentifier(orgId)
+                                .organization(dnAttributes.get("O"))
+                                .country(dnAttributes.get("C"))
+                                .commonName(dnAttributes.get("CN"))
+                                .serialNumber(serialNumber)
+                                .build();
+                        return Mono.just(detailedIssuer);
+                    });
+        } catch (JsonProcessingException e) {
+            return Mono.error(new RuntimeException("Error parsing certificate info", e));
+        } catch (InvalidNameException e) {
+            return Mono.error(new RuntimeException("Error parsing subjectDN", e));
+        } catch (Exception e) {
+            return Mono.error(new RuntimeException("Unexpected error", e));
+        }
+    }
+
+    private Mono<Boolean> validateCertificate(String accessToken) {
+        credentialID = remoteSignatureConfig.getRemoteSignatureCredentialId();
+        String credentialListEndpoint = remoteSignatureConfig.getRemoteSignatureDomain() + "/csc/v2/credentials/list";
+        headers.clear();
+        headers.add(new AbstractMap.SimpleEntry<>(HttpHeaders.AUTHORIZATION, BEARER_PREFIX + accessToken));
+        headers.add(new AbstractMap.SimpleEntry<>(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE));
+
+        requestBody.clear();
+        requestBody.put("credentialInfo", true);
+        requestBody.put(CERTIFICATES, "chain");
+        requestBody.put("certInfo", true);
+        requestBody.put("authInfo", true);
+        requestBody.put("onlyValid", true);
+        requestBody.put("lang", 0);
+        requestBody.put("clientData", "string");
+        try {
+            ObjectMapper objectMapperIntern = new ObjectMapper();
+            String requestBodyJson = objectMapperIntern.writeValueAsString(requestBody);
+            return httpUtils.postRequest(credentialListEndpoint, headers, requestBodyJson)
+                    .flatMap(responseJson -> {
+                        try {
+                            Map<String, List<String>> responseMap = objectMapperIntern.readValue(responseJson, Map.class);
+                            List<String> receivedCredentialIDs = responseMap.get("credentialIDs");
+                            boolean isValid = receivedCredentialIDs != null &&
+                                    receivedCredentialIDs.stream()
+                                            .anyMatch(id -> id.trim().equalsIgnoreCase(credentialID.trim()));
+                            return Mono.just(isValid);
+                        } catch (JsonProcessingException e) {
+                            return Mono.error(new RemoteSignatureException("Error parsing certificate list response", e));
+                        }
+                    })
+                    .switchIfEmpty(Mono.just(false))
+                    .doOnError(error -> log.error("Error validating certificate: {}", error.getMessage()));
+        } catch (JsonProcessingException e) {
+            return Mono.error(new RemoteSignatureException(SERIALIZING_ERROR, e));
+        }
+    }
+
+    private Mono<String> extractOrgFromX509(byte[] decodedBytes) {
+        return Mono.defer(() -> {
+            try {
+                CertificateFactory cf = CertificateFactory.getInstance("X.509");
+                X509Certificate x509Certificate = (X509Certificate) cf.generateCertificate(new ByteArrayInputStream(decodedBytes));
+                String certAsString = x509Certificate.toString();
+                Pattern certPattern = Pattern.compile("OID\\.2\\.5\\.4\\.97=([^,\\s]+)");
+                Matcher certMatcher = certPattern.matcher(certAsString);
+                if (certMatcher.find()) {
+                    String orgId = certMatcher.group(1);
+                    return Mono.just(orgId);
+                } else {
+                    return Mono.empty();
+                }
+            } catch (Exception e) {
+                log.debug("Error parsing certificate: {}", e.getMessage());
+                return Mono.empty();
+            }
+        });
+    }
+
+}
