@@ -3,6 +3,7 @@ package es.in2.issuer.backend.shared.infrastructure.config;
 import es.in2.issuer.backend.shared.infrastructure.config.adapter.ConfigAdapter;
 import es.in2.issuer.backend.shared.infrastructure.config.adapter.factory.ConfigAdapterFactory;
 import es.in2.issuer.backend.shared.infrastructure.config.properties.DefaultSignerProperties;
+import es.in2.issuer.backend.signing.infrastructure.config.DefaultSignerConfig;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
