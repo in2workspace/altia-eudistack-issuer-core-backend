@@ -3,9 +3,12 @@ package es.in2.issuer.backend.shared.domain.util.factory;
 import es.in2.issuer.backend.shared.domain.exception.RemoteSignatureException;
 import es.in2.issuer.backend.shared.domain.model.dto.credential.DetailedIssuer;
 import es.in2.issuer.backend.shared.domain.model.dto.credential.SimpleIssuer;
-import es.in2.issuer.backend.shared.domain.service.impl.RemoteSignatureServiceImpl;
-import es.in2.issuer.backend.shared.infrastructure.config.DefaultSignerConfig;
-import es.in2.issuer.backend.shared.infrastructure.config.RemoteSignatureConfig;
+import es.in2.issuer.backend.shared.domain.service.impl.SigningRecoveryServiceImpl;
+import es.in2.issuer.backend.signing.domain.service.QtspIssuerService;
+import es.in2.issuer.backend.signing.domain.service.impl.QtspIssuerServiceImpl;
+import es.in2.issuer.backend.signing.domain.util.QtspRetryPolicy;
+import es.in2.issuer.backend.signing.infrastructure.config.DefaultSignerConfig;
+import es.in2.issuer.backend.signing.infrastructure.qtsp.auth.QtspAuthClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -22,9 +25,10 @@ import static es.in2.issuer.backend.backoffice.domain.util.Constants.*;
 @Slf4j
 public class IssuerFactory {
 
-    private final RemoteSignatureConfig remoteSignatureConfig;
     private final DefaultSignerConfig defaultSignerConfig;
-    private final RemoteSignatureServiceImpl remoteSignatureServiceImpl;
+    private final SigningRecoveryServiceImpl signingRecoveryServiceImpl;
+    private final QtspIssuerServiceImpl qtspIssuerServiceImpl;
+    private final QtspAuthClient qtspAuthClient;
 
     /**
      * Detailed issuer creation without post-recover side-effects.
@@ -33,7 +37,7 @@ public class IssuerFactory {
      */
     public Mono<DetailedIssuer> createDetailedIssuer() {
         log.debug("🔐: createDetailedIssuer");
-        return isServerMode()
+        return qtspIssuerServiceImpl.isServerMode()
                 ? Mono.just(buildLocalDetailedIssuer())
                 : createRemoteDetailedIssuer();
     }
@@ -45,7 +49,7 @@ public class IssuerFactory {
      */
     public Mono<SimpleIssuer> createSimpleIssuer() {
         log.debug("🔐: createSimpleIssuer");
-        return isServerMode()
+        return qtspIssuerServiceImpl.isServerMode()
                 ? Mono.just(buildLocalSimpleIssuer())
                 : createRemoteDetailedIssuer()
                 .map(detailed -> SimpleIssuer.builder()
@@ -60,7 +64,7 @@ public class IssuerFactory {
      */
     public Mono<DetailedIssuer> createDetailedIssuerAndNotifyOnError(String procedureId, String email) {
         log.debug("🔐: createDetailedIssuerAndNotifyOnError");
-        return isServerMode()
+        return qtspIssuerServiceImpl.isServerMode()
                 ? Mono.just(buildLocalDetailedIssuer())
                 : createRemoteDetailedIssuerNotifyOnError(procedureId, email);
     }
@@ -72,16 +76,12 @@ public class IssuerFactory {
      */
     public Mono<SimpleIssuer> createSimpleIssuerAndNotifyOnError(String procedureId, String email) {
         log.debug("🔐: createSimpleIssuerAndNotifyOnError");
-        return isServerMode()
+        return qtspIssuerServiceImpl.isServerMode()
                 ? Mono.just(buildLocalSimpleIssuer())
                 : createRemoteDetailedIssuerNotifyOnError(procedureId, email)
                 .map(detailed -> SimpleIssuer.builder()
                         .id(detailed.getId())
                         .build());
-    }
-
-    private boolean isServerMode() {
-        return SIGNATURE_REMOTE_TYPE_SERVER.equals(remoteSignatureConfig.getRemoteSignatureType());
     }
 
     private DetailedIssuer buildLocalDetailedIssuer() {
@@ -126,7 +126,7 @@ public class IssuerFactory {
                 .retryWhen(buildRetrySpec())
                 .onErrorResume(err -> {
                     log.error("Error during remote issuer creation at {}: {}", new Date(), err.getMessage());
-                    return remoteSignatureServiceImpl.handlePostRecoverError(procedureId, email)
+                    return signingRecoveryServiceImpl.handlePostRecoverError(procedureId, email)
                             .then(Mono.empty());
                 });
     }
@@ -135,28 +135,14 @@ public class IssuerFactory {
      * Core remote signature flow: validate -> token -> certInfo -> extract issuer
      */
     private Mono<DetailedIssuer> remoteIssuerCoreFlow() {
-        return Mono.defer(() ->
-                remoteSignatureServiceImpl.validateCredentials()
-                        .flatMap(valid -> {
-                            if (Boolean.FALSE.equals(valid)) {
-                                log.error("Credentials mismatch. Signature process aborted.");
-                                return Mono.error(new RemoteSignatureException("Credentials mismatch."));
-                            }
-                            return remoteSignatureServiceImpl.requestAccessToken(null, SIGNATURE_REMOTE_SCOPE_SERVICE)
-                                    .flatMap(token -> remoteSignatureServiceImpl.requestCertificateInfo(
-                                            token,
-                                            remoteSignatureConfig.getRemoteSignatureCredentialId()
-                                    ))
-                                    .flatMap(remoteSignatureServiceImpl::extractIssuerFromCertificateInfo);
-                        })
-        );
+        return qtspIssuerServiceImpl.resolveRemoteDetailedIssuer();
     }
 
     private Retry buildRetrySpec() {
         return Retry.backoff(3, Duration.ofSeconds(1))
                 .maxBackoff(Duration.ofSeconds(5))
                 .jitter(0.5)
-                .filter(remoteSignatureServiceImpl::isRecoverableError)
+                .filter(QtspRetryPolicy::isRecoverable)
                 .doBeforeRetry(rs -> log.info("Retry #{} for remote signature", rs.totalRetries() + 1));
     }
 }

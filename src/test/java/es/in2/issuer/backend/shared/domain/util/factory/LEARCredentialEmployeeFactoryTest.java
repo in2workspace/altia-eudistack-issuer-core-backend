@@ -11,10 +11,8 @@ import es.in2.issuer.backend.shared.domain.model.dto.credential.lear.Mandator;
 import es.in2.issuer.backend.shared.domain.model.dto.credential.lear.Power;
 import es.in2.issuer.backend.shared.domain.model.dto.credential.lear.employee.LEARCredentialEmployee;
 import es.in2.issuer.backend.shared.domain.service.AccessTokenService;
-import es.in2.issuer.backend.shared.domain.service.impl.RemoteSignatureServiceImpl;
 import es.in2.issuer.backend.shared.infrastructure.config.AppConfig;
-import es.in2.issuer.backend.shared.infrastructure.config.DefaultSignerConfig;
-import es.in2.issuer.backend.shared.infrastructure.config.RemoteSignatureConfig;
+import es.in2.issuer.backend.signing.infrastructure.config.DefaultSignerConfig;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -26,7 +24,6 @@ import reactor.test.StepVerifier;
 
 import java.lang.reflect.Method;
 import java.time.format.DateTimeParseException;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 

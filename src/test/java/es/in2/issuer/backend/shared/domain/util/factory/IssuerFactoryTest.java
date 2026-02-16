@@ -2,9 +2,7 @@ package es.in2.issuer.backend.shared.domain.util.factory;
 
 import es.in2.issuer.backend.shared.domain.exception.RemoteSignatureException;
 import es.in2.issuer.backend.shared.domain.model.dto.credential.DetailedIssuer;
-import es.in2.issuer.backend.shared.domain.service.impl.RemoteSignatureServiceImpl;
-import es.in2.issuer.backend.shared.infrastructure.config.DefaultSignerConfig;
-import es.in2.issuer.backend.shared.infrastructure.config.RemoteSignatureConfig;
+import es.in2.issuer.backend.signing.infrastructure.config.DefaultSignerConfig;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

@@ -1,4 +1,4 @@
-package es.in2.issuer.backend.shared.domain.service;
+package es.in2.issuer.backend.signing.domain.service;
 
 
 import es.in2.issuer.backend.shared.domain.model.dto.SignatureRequest;
