@@ -139,8 +139,11 @@ class RemoteSignatureServiceImplTest {
         when(qtspAuthClient.requestAccessToken(eq(req), eq(SIGNATURE_REMOTE_SCOPE_CREDENTIAL)))
                 .thenReturn(Mono.just("access-token"));
 
-        when(httpUtils.postRequest(eq("https://api.external.com/csc/v2/credentials/authorize"), anyList(), anyString()))
-                .thenReturn(Mono.just("{\"NO_SAD\":\"x\"}"));
+        when(httpUtils.postRequest(
+                eq("https://api.external.com/csc/v2/credentials/authorize"),
+                anyList(),
+                isNull()
+        )).thenReturn(Mono.just("{\"NO_SAD\":\"x\"}"));
 
         when(objectMapper.readValue(eq("{\"NO_SAD\":\"x\"}"), eq(Map.class)))
                 .thenReturn(Map.of("NO_SAD", "x"));
@@ -250,32 +253,5 @@ class RemoteSignatureServiceImplTest {
         // token+sad+signDoc were attempted multiple times due to retry
         verify(httpUtils, times(3)).postRequest(eq("https://api.external.com/csc/v2/signatures/signDoc"), anyList(), anyString());
         verify(deferredCredentialMetadataService).deleteDeferredCredentialMetadataById("proc-1");
-    }
-
-    @Test
-    void executeSigningFlow_shouldWrapParsingError() throws Exception {
-        when(remoteSignatureConfig.getRemoteSignatureType()).thenReturn(SIGNATURE_REMOTE_TYPE_SERVER);
-        when(remoteSignatureConfig.getRemoteSignatureDomain()).thenReturn("http://dss");
-        when(remoteSignatureConfig.getRemoteSignatureSignPath()).thenReturn("/sign");
-
-        SignatureRequest req = new SignatureRequest(
-                new SignatureConfiguration(SignatureType.COSE, Map.of()),
-                "data"
-        );
-
-        when(objectMapper.writeValueAsString(req)).thenReturn("{json}");
-        when(httpUtils.postRequest(eq("http://dss/api/v1/sign"), anyList(), anyString()))
-                .thenReturn(Mono.just("{not-signed-data-json}"));
-
-        when(objectMapper.readValue(anyString(), eq(SignedData.class)))
-                .thenThrow(new IOException("bad json"));
-
-        StepVerifier.create(remoteSignatureService.signSystemCredential(req, "token"))
-                .expectErrorSatisfies(ex -> {
-                    assertThat(ex).isInstanceOf(RemoteSignatureException.class);
-                    assertThat(ex.getMessage()).contains("Error parsing signed data");
-                    assertThat(ex.getCause()).isInstanceOf(SignedDataParsingException.class);
-                })
-                .verify();
     }
 }

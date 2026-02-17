@@ -44,9 +44,20 @@ public class StatusListSigner implements CredentialPayloadSigner {
                     );
 
                     return signingProvider.sign(req)
-                            .map(SigningResult::data);
+                            .map(SigningResult::data)
+                            .flatMap(jwt -> {
+                                if (jwt == null || jwt.trim().isEmpty()) {
+                                    return Mono.error(new SigningException("StatusList signer returned empty JWT; listId=" + listId));
+                                }
+                                return Mono.just(jwt);
+                            });
                 })
-                .onErrorMap(ex -> new SigningException("StatusList signing failed; listId=" + listId, ex));
+                .onErrorMap(ex -> {
+                    if (ex instanceof SigningException && ex.getMessage() != null && ex.getMessage().startsWith("StatusList signer returned empty JWT")) {
+                        return ex;
+                    }
+                    return new SigningException("StatusList signing failed; listId=" + listId, ex);
+                });
     }
 
     private Mono<String> toJson(Map<String, Object> payload) {

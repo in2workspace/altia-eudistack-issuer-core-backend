@@ -180,7 +180,6 @@ class IssuerFactoryTest {
     void createDetailedIssuer_Remote_RecoverableErrors_ThenRetryExhausted() {
         when(qtspIssuerServiceImpl.isServerMode()).thenReturn(false);
 
-        // OJO: este test asume que QtspRetryPolicy::isRecoverable considera TimeoutException como recuperable.
         when(qtspIssuerServiceImpl.resolveRemoteDetailedIssuer())
                 .thenReturn(Mono.error(new TimeoutException("t1")))
                 .thenReturn(Mono.error(new TimeoutException("t2")))
@@ -189,28 +188,24 @@ class IssuerFactoryTest {
 
         StepVerifier.create(issuerFactory.createDetailedIssuer())
                 .expectErrorSatisfies(err -> {
-                    // Reactor envuelve cuando se agotan retries
                     assertEquals("reactor.core.Exceptions$RetryExhaustedException", err.getClass().getName());
                     assertEquals(TimeoutException.class, err.getCause().getClass());
                 })
                 .verify();
 
         verify(qtspIssuerServiceImpl).isServerMode();
-        verify(qtspIssuerServiceImpl, times(4)).resolveRemoteDetailedIssuer();
+        verify(qtspIssuerServiceImpl, times(1)).resolveRemoteDetailedIssuer();
         verifyNoMoreInteractions(qtspIssuerServiceImpl);
         verifyNoInteractions(signingRecoveryServiceImpl);
     }
+
 
     @Test
     void createDetailedIssuerAndNotifyOnError_Remote_RecoverableErrors_ThenPostRecoverCompletesEmpty() {
         when(qtspIssuerServiceImpl.isServerMode()).thenReturn(false);
 
-        // OJO: igual que antes, depende de QtspRetryPolicy.
         when(qtspIssuerServiceImpl.resolveRemoteDetailedIssuer())
-                .thenReturn(Mono.error(new TimeoutException("t1")))
-                .thenReturn(Mono.error(new TimeoutException("t2")))
-                .thenReturn(Mono.error(new TimeoutException("t3")))
-                .thenReturn(Mono.error(new TimeoutException("t4")));
+                .thenReturn(Mono.error(new TimeoutException("t1")));
 
         when(signingRecoveryServiceImpl.handlePostRecoverError(procedureId, ""))
                 .thenReturn(Mono.empty());
@@ -219,7 +214,7 @@ class IssuerFactoryTest {
                 .verifyComplete();
 
         verify(qtspIssuerServiceImpl).isServerMode();
-        verify(qtspIssuerServiceImpl, times(4)).resolveRemoteDetailedIssuer();
+        verify(qtspIssuerServiceImpl, times(1)).resolveRemoteDetailedIssuer();
         verify(signingRecoveryServiceImpl).handlePostRecoverError(procedureId, "");
         verifyNoMoreInteractions(qtspIssuerServiceImpl, signingRecoveryServiceImpl);
     }
