@@ -3,11 +3,9 @@ package es.in2.issuer.backend.signing.infrastructure.config;
 import es.in2.issuer.backend.shared.infrastructure.config.adapter.ConfigAdapter;
 import es.in2.issuer.backend.shared.infrastructure.config.adapter.factory.ConfigAdapterFactory;
 import es.in2.issuer.backend.shared.infrastructure.config.properties.DefaultSignerProperties;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
-@Slf4j
 public class DefaultSignerConfig {
     private final ConfigAdapter configAdapter;
     private final DefaultSignerProperties defaultSignerProperties;

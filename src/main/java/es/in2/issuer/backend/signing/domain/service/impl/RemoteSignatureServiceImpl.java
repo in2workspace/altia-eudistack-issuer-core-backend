@@ -1,7 +1,6 @@
 package es.in2.issuer.backend.signing.domain.service.impl;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import es.in2.issuer.backend.shared.domain.exception.*;
 import es.in2.issuer.backend.shared.domain.model.dto.SignatureRequest;
@@ -9,7 +8,6 @@ import es.in2.issuer.backend.shared.domain.model.dto.SignedData;
 import es.in2.issuer.backend.shared.domain.service.*;
 import es.in2.issuer.backend.shared.domain.util.HttpUtils;
 import es.in2.issuer.backend.shared.domain.util.JwtUtils;
-import es.in2.issuer.backend.shared.infrastructure.repository.CredentialProcedureRepository;
 import es.in2.issuer.backend.signing.domain.service.RemoteSignatureService;
 import es.in2.issuer.backend.signing.domain.util.QtspRetryPolicy;
 import es.in2.issuer.backend.signing.infrastructure.config.RemoteSignatureConfig;
@@ -43,7 +41,6 @@ public class RemoteSignatureServiceImpl implements RemoteSignatureService {
     private final RemoteSignatureConfig remoteSignatureConfig;
     private static final String SAD_NAME = "SAD";
     private static final String SERIALIZING_ERROR = "Error serializing request body to JSON";
-    private final CredentialProcedureRepository credentialProcedureRepository;
     private final DeferredCredentialMetadataService deferredCredentialMetadataService;
     private final List<Map.Entry<String, String>> headers = new ArrayList<>();
     private final Map<String, Object> requestBody = new HashMap<>();
@@ -264,45 +261,6 @@ public class RemoteSignatureServiceImpl implements RemoteSignatureService {
                 })
                 .doOnError(error -> log.error("Error retrieving access token: {}", error.getMessage()));
     }
-
-    public boolean isServerMode() {
-        return SIGNATURE_REMOTE_TYPE_SERVER.equals(remoteSignatureConfig.getRemoteSignatureType());
-    }
-
-    //TODO Eliminar la función cuando el mail de Jesús no sea un problema
-    public Mono<String> getMandatorMail(String procedureId) {
-        return credentialProcedureRepository.findById(UUID.fromString(procedureId))
-                .flatMap(credentialProcedure -> {
-                    try {
-                        JsonNode credential = objectMapper.readTree(credentialProcedure.getCredentialDecoded());
-                        if (credential.get(CREDENTIAL_SUBJECT).get(MANDATE).get(MANDATOR).get(EMAIL).asText().equals("jesus.ruiz@in2.es")) {
-                            return Mono.just("domesupport@in2.es");
-                        } else {
-                            return Mono.just(credential.get(CREDENTIAL_SUBJECT).get(MANDATE).get(MANDATOR).get(EMAIL).asText());
-                        }
-                    } catch (JsonProcessingException e) {
-                        return Mono.error(new RuntimeException());
-                    }
-
-                });
-    }
-
-    public Mono<String> getMandatorMailLearCredentialMachine(String procedureId) {
-        return credentialProcedureRepository.findById(UUID.fromString(procedureId))
-                .flatMap(credentialProcedure -> {
-                    try {
-                        JsonNode credential = objectMapper.readTree(credentialProcedure.getCredentialDecoded());
-                        if (credential.get(CREDENTIAL_SUBJECT).get(MANDATE).get(MANDATOR).get(EMAIL).asText().equals("jesus.ruiz@in2.es")) {
-                            return Mono.just("domesupport@in2.es");
-                        } else {
-                            return Mono.just(credential.get(CREDENTIAL_SUBJECT).get(MANDATE).get(MANDATOR).get(EMAIL).asText());
-                        }
-                    } catch (JsonProcessingException e) {
-                        return Mono.error(new RuntimeException());
-                    }
-                });
-    }
-
 
     private Mono<String> sendSignatureRequest(SignatureRequest signatureRequest, String accessToken, String sad) {
         credentialID = remoteSignatureConfig.getRemoteSignatureCredentialId();

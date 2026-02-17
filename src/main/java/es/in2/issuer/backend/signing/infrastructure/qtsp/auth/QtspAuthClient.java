@@ -42,14 +42,12 @@ public class QtspAuthClient {
 
     private String credentialID;
     private String credentialPassword;
-    private String clientId;
-    private String clientSecret;
 
     public Mono<String> requestAccessToken(SignatureRequest signatureRequest, String scope){
         credentialID = remoteSignatureConfig.getRemoteSignatureCredentialId();
         credentialPassword = remoteSignatureConfig.getRemoteSignatureCredentialPassword();
-        clientId = remoteSignatureConfig.getRemoteSignatureClientId();
-        clientSecret = remoteSignatureConfig.getRemoteSignatureClientSecret();
+        String clientId = remoteSignatureConfig.getRemoteSignatureClientId();
+        String clientSecret = remoteSignatureConfig.getRemoteSignatureClientSecret();
         String grantType = "client_credentials";
         String signatureGetAccessTokenEndpoint = remoteSignatureConfig.getRemoteSignatureDomain() + "/oauth2/token";
         String hashAlgorithmOID = "2.16.840.1.101.3.4.2.1";
