@@ -22,7 +22,7 @@ public class SigningProviderConfig {
      * Values reserved for future Enterprise implementations:
      * - csc-sign-hash
      */
-    @Value("${issuer.signing.provider:remote}")
+    @Value("${issuer.signing.provider:csc-sign-doc}")
     private String provider;
 
     private final InMemorySigningProvider inMemorySigningProvider;
