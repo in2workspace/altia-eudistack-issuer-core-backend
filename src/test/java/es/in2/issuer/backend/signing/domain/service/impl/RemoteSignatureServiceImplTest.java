@@ -1,11 +1,10 @@
 package es.in2.issuer.backend.signing.domain.service.impl;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import es.in2.issuer.backend.shared.domain.exception.RemoteSignatureException;
 import es.in2.issuer.backend.shared.domain.exception.SadException;
-import es.in2.issuer.backend.shared.domain.exception.SignatureProcessingException;
-import es.in2.issuer.backend.shared.domain.exception.SignedDataParsingException;
+import es.in2.issuer.backend.signing.domain.exception.SignatureProcessingException;
+import es.in2.issuer.backend.signing.domain.exception.SignedDataParsingException;
 import es.in2.issuer.backend.shared.domain.model.dto.SignatureConfiguration;
 import es.in2.issuer.backend.shared.domain.model.dto.SignatureRequest;
 import es.in2.issuer.backend.shared.domain.model.dto.SignedData;

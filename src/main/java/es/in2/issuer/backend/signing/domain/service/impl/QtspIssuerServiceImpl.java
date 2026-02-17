@@ -7,6 +7,7 @@ import es.in2.issuer.backend.shared.domain.exception.*;
 import es.in2.issuer.backend.shared.domain.model.dto.SignatureRequest;
 import es.in2.issuer.backend.shared.domain.model.dto.credential.DetailedIssuer;
 import es.in2.issuer.backend.shared.domain.util.HttpUtils;
+import es.in2.issuer.backend.signing.domain.exception.OrganizationIdentifierNotFoundException;
 import es.in2.issuer.backend.signing.domain.service.QtspIssuerService;
 import es.in2.issuer.backend.signing.infrastructure.config.RemoteSignatureConfig;
 import es.in2.issuer.backend.signing.infrastructure.qtsp.auth.QtspAuthClient;

@@ -8,6 +8,8 @@ import es.in2.issuer.backend.shared.domain.model.dto.SignedData;
 import es.in2.issuer.backend.shared.domain.service.*;
 import es.in2.issuer.backend.shared.domain.util.HttpUtils;
 import es.in2.issuer.backend.shared.domain.util.JwtUtils;
+import es.in2.issuer.backend.signing.domain.exception.SignatureProcessingException;
+import es.in2.issuer.backend.signing.domain.exception.SignedDataParsingException;
 import es.in2.issuer.backend.signing.domain.service.RemoteSignatureService;
 import es.in2.issuer.backend.signing.domain.util.QtspRetryPolicy;
 import es.in2.issuer.backend.signing.infrastructure.config.RemoteSignatureConfig;

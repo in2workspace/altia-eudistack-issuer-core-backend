@@ -1,4 +1,4 @@
-package es.in2.issuer.backend.shared.domain.exception;
+package es.in2.issuer.backend.signing.domain.exception;
 
 public class SignedDataParsingException extends Exception {
 

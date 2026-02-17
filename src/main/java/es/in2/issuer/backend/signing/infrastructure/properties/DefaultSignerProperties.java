@@ -1,4 +1,4 @@
-package es.in2.issuer.backend.shared.infrastructure.config.properties;
+package es.in2.issuer.backend.signing.infrastructure.properties;
 
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.boot.context.properties.ConfigurationProperties;

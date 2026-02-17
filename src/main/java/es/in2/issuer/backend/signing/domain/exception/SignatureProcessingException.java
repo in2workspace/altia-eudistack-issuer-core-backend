@@ -1,4 +1,4 @@
-package es.in2.issuer.backend.shared.domain.exception;
+package es.in2.issuer.backend.signing.domain.exception;
 
 import java.io.Serial;
 
