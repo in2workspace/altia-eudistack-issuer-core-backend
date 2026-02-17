@@ -1,5 +1,5 @@
 package es.in2.issuer.backend.signing.domain.service.impl;
-import es.in2.issuer.backend.shared.domain.exception.HashGenerationException;
+import es.in2.issuer.backend.signing.domain.exception.HashGenerationException;
 import es.in2.issuer.backend.signing.domain.service.HashGeneratorService;
 import org.springframework.stereotype.Service;
 

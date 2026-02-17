@@ -1,6 +1,6 @@
-package es.in2.issuer.backend.shared.domain.service.impl;
+package es.in2.issuer.backend.signing.domain.service.impl;
 
-import es.in2.issuer.backend.shared.domain.exception.HashGenerationException;
+import es.in2.issuer.backend.signing.domain.exception.HashGenerationException;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

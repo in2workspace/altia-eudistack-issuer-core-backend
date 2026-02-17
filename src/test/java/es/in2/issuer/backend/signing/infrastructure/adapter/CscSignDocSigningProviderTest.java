@@ -8,6 +8,7 @@ import es.in2.issuer.backend.signing.domain.model.SigningContext;
 import es.in2.issuer.backend.signing.domain.model.SigningRequest;
 import es.in2.issuer.backend.signing.domain.model.SigningType;
 
+import es.in2.issuer.backend.signing.domain.service.RemoteSignatureService;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;

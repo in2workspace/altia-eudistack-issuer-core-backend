@@ -41,9 +41,6 @@ class LEARCredentialEmployeeFactoryTest {
     private AccessTokenService accessTokenService;
 
     @Mock
-    private RemoteSignatureConfig remoteSignatureConfig;
-
-    @Mock
     private IssuerFactory issuerFactory;
 
     @InjectMocks
@@ -51,9 +48,6 @@ class LEARCredentialEmployeeFactoryTest {
 
     @Mock
     private DefaultSignerConfig defaultSignerConfig;
-
-    @Mock
-    private RemoteSignatureServiceImpl remoteSignatureServiceImpl;
 
     @Mock
     private AppConfig appConfig;
@@ -185,8 +179,6 @@ class LEARCredentialEmployeeFactoryTest {
                 .expectNext(expectedString)
                 .verifyComplete();
 
-        // Assert
-        verify(remoteSignatureServiceImpl, never()).validateCredentials();
     }
 
 

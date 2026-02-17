@@ -1,6 +1,6 @@
 package es.in2.issuer.backend.signing.domain.service;
 
-import es.in2.issuer.backend.shared.domain.exception.HashGenerationException;
+import es.in2.issuer.backend.signing.domain.exception.HashGenerationException;
 
 public interface HashGeneratorService {
     String generateHash(String unsignedDocument, String algorithm) throws HashGenerationException;

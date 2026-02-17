@@ -4,7 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import es.in2.issuer.backend.shared.domain.exception.AccessTokenException;
 import es.in2.issuer.backend.shared.domain.exception.AuthorizationDetailsException;
-import es.in2.issuer.backend.shared.domain.exception.HashGenerationException;
+import es.in2.issuer.backend.signing.domain.exception.HashGenerationException;
 import es.in2.issuer.backend.shared.domain.exception.RemoteSignatureException;
 import es.in2.issuer.backend.shared.domain.model.dto.SignatureRequest;
 import es.in2.issuer.backend.signing.domain.service.HashGeneratorService;

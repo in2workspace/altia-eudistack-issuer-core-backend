@@ -1,14 +1,11 @@
 package es.in2.issuer.backend.shared.domain.util.factory;
 
-import es.in2.issuer.backend.shared.domain.exception.RemoteSignatureException;
 import es.in2.issuer.backend.shared.domain.model.dto.credential.DetailedIssuer;
 import es.in2.issuer.backend.shared.domain.model.dto.credential.SimpleIssuer;
 import es.in2.issuer.backend.shared.domain.service.impl.SigningRecoveryServiceImpl;
-import es.in2.issuer.backend.signing.domain.service.QtspIssuerService;
 import es.in2.issuer.backend.signing.domain.service.impl.QtspIssuerServiceImpl;
 import es.in2.issuer.backend.signing.domain.util.QtspRetryPolicy;
 import es.in2.issuer.backend.signing.infrastructure.config.DefaultSignerConfig;
-import es.in2.issuer.backend.signing.infrastructure.qtsp.auth.QtspAuthClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -28,7 +25,6 @@ public class IssuerFactory {
     private final DefaultSignerConfig defaultSignerConfig;
     private final SigningRecoveryServiceImpl signingRecoveryServiceImpl;
     private final QtspIssuerServiceImpl qtspIssuerServiceImpl;
-    private final QtspAuthClient qtspAuthClient;
 
     /**
      * Detailed issuer creation without post-recover side-effects.
