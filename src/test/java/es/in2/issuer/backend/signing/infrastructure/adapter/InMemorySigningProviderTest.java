@@ -6,12 +6,15 @@ import es.in2.issuer.backend.signing.domain.model.SigningType;
 import es.in2.issuer.backend.signing.domain.exception.SigningException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.InjectMocks;
 import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.test.StepVerifier;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -80,24 +83,6 @@ class InMemorySigningProviderTest {
     }
 
     @Test
-    void signThrowsSigningExceptionOnNullData() {
-        SigningContext context = new SigningContext("token", "proc", "email");
-        SigningRequest request = new SigningRequest(SigningType.JADES, null, context);
-        StepVerifier.create(provider.sign(request))
-                .expectError(SigningException.class)
-                .verify();
-    }
-
-    @Test
-    void signThrowsSigningExceptionOnBlankData() {
-        SigningContext context = new SigningContext("token", "proc", "email");
-        SigningRequest request = new SigningRequest(SigningType.JADES, "   ", context);
-        StepVerifier.create(provider.sign(request))
-                .expectError(SigningException.class)
-                .verify();
-    }
-
-    @Test
     void signThrowsSigningExceptionOnNullContext() {
         SigningRequest request = new SigningRequest(SigningType.JADES, "data", null);
         StepVerifier.create(provider.sign(request))
@@ -105,21 +90,21 @@ class InMemorySigningProviderTest {
                 .verify();
     }
 
-    @Test
-    void signThrowsSigningExceptionOnNullToken() {
-        SigningContext context = new SigningContext(null, "proc", "email");
-        SigningRequest request = new SigningRequest(SigningType.JADES, "data", context);
+    @ParameterizedTest
+    @MethodSource("invalidSigningRequests")
+    void signThrowsSigningExceptionOnInvalidRequest(SigningRequest request) {
         StepVerifier.create(provider.sign(request))
                 .expectError(SigningException.class)
                 .verify();
     }
 
-    @Test
-    void signThrowsSigningExceptionOnBlankToken() {
-        SigningContext context = new SigningContext("   ", "proc", "email");
-        SigningRequest request = new SigningRequest(SigningType.JADES, "data", context);
-        StepVerifier.create(provider.sign(request))
-                .expectError(SigningException.class)
-                .verify();
+    private static Stream<SigningRequest> invalidSigningRequests() {
+        SigningContext validContext = new SigningContext("token", "proc", "email");
+        return Stream.of(
+                new SigningRequest(SigningType.JADES, null, validContext), // null data
+                new SigningRequest(SigningType.JADES, "   ", validContext), // blank data
+                new SigningRequest(SigningType.JADES, "data", new SigningContext(null, "proc", "email")), // null token
+                new SigningRequest(SigningType.JADES, "data", new SigningContext("   ", "proc", "email")) // blank token
+        );
     }
 }

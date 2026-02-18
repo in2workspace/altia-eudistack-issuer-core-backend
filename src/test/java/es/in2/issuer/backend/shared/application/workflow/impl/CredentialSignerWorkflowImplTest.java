@@ -1,7 +1,6 @@
 package es.in2.issuer.backend.shared.application.workflow.impl;
 
 import es.in2.issuer.backend.shared.domain.service.*;
-import static org.mockito.Mockito.*;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -37,6 +36,7 @@ import reactor.test.StepVerifier;
 
 import java.util.UUID;
 
+import static org.mockito.Mockito.*;
 import static es.in2.issuer.backend.backoffice.domain.util.Constants.JWT_VC;
 import static es.in2.issuer.backend.shared.domain.util.Constants.LABEL_CREDENTIAL_TYPE;
 import static es.in2.issuer.backend.shared.domain.util.Constants.LEAR_CREDENTIAL_EMPLOYEE_TYPE;

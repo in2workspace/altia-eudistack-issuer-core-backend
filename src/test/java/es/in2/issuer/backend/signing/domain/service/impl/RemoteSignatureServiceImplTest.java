@@ -1,5 +1,6 @@
 package es.in2.issuer.backend.signing.domain.service.impl;
 
+import org.mockito.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import es.in2.issuer.backend.shared.domain.exception.SadException;
 import es.in2.issuer.backend.signing.domain.exception.SignatureProcessingException;
@@ -14,7 +15,7 @@ import es.in2.issuer.backend.signing.infrastructure.config.RemoteSignatureConfig
 import es.in2.issuer.backend.signing.infrastructure.qtsp.auth.QtspAuthClient;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.*;
+
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -183,7 +184,7 @@ class RemoteSignatureServiceImplTest {
 
         // decodePayload returns something different
         when(jwtUtils.decodePayload(signedJwt)).thenReturn("{\"a\":999}");
-        when(jwtUtils.areJsonsEqual(eq("{\"a\":999}"), eq(req.data()))).thenReturn(false);
+        when(jwtUtils.areJsonsEqual("{\"a\":999}", req.data())).thenReturn(false);
 
         StepVerifier.create(remoteSignatureService.processSignatureResponse(req, responseJson))
                 .expectErrorSatisfies(ex -> {
@@ -205,7 +206,7 @@ class RemoteSignatureServiceImplTest {
                 "{\"a\":1}"
         );
 
-        when(qtspAuthClient.requestAccessToken(eq(req), eq(SIGNATURE_REMOTE_SCOPE_CREDENTIAL)))
+        when(qtspAuthClient.requestAccessToken(req, SIGNATURE_REMOTE_SCOPE_CREDENTIAL))
                 .thenReturn(Mono.just("access-token"));
 
         when(httpUtils.postRequest(eq("https://api.external.com/csc/v2/credentials/authorize"), anyList(), anyString()))
@@ -232,7 +233,7 @@ class RemoteSignatureServiceImplTest {
                 .thenReturn(Map.of("DocumentWithSignature", List.of(base64Signed)));
 
         when(jwtUtils.decodePayload(jwtOrJades)).thenReturn("{\"a\":1}");
-        when(jwtUtils.areJsonsEqual(eq("{\"a\":1}"), eq(req.data()))).thenReturn(true);
+        when(jwtUtils.areJsonsEqual("{\"a\":1}",req.data())).thenReturn(true);
 
         String signedDataJson = "{\"type\":\"JADES\",\"data\":\"" + jwtOrJades + "\"}";
         when(objectMapper.writeValueAsString(any(Map.class))).thenReturn(signedDataJson);
