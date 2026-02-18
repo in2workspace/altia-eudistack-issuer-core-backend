@@ -42,9 +42,9 @@ import java.util.Base64;
 import java.util.List;
 import java.util.UUID;
 
+import static es.in2.issuer.backend.shared.domain.util.Constants.*;
 import static es.in2.issuer.backend.backoffice.domain.util.Constants.CWT_VC;
 import static es.in2.issuer.backend.backoffice.domain.util.Constants.JWT_VC;
-import static es.in2.issuer.backend.shared.domain.util.Constants.*;
 
 @Service
 @Slf4j

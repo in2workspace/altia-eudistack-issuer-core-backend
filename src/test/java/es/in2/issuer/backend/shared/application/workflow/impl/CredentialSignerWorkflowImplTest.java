@@ -7,7 +7,9 @@ import es.in2.issuer.backend.backoffice.application.workflow.policies.Backoffice
 import es.in2.issuer.backend.shared.application.workflow.DeferredCredentialWorkflow;
 import es.in2.issuer.backend.shared.domain.exception.CredentialProcedureInvalidStatusException;
 import es.in2.issuer.backend.shared.domain.exception.CredentialProcedureNotFoundException;
-import es.in2.issuer.backend.shared.domain.model.dto.*;
+import es.in2.issuer.backend.shared.domain.model.dto.LEARCredentialEmployeeJwtPayload;
+import es.in2.issuer.backend.shared.domain.model.dto.SignedCredentials;
+import es.in2.issuer.backend.shared.domain.model.dto.VerifierOauth2AccessToken;
 import es.in2.issuer.backend.shared.domain.model.dto.credential.SimpleIssuer;
 import es.in2.issuer.backend.shared.domain.model.entities.CredentialProcedure;
 import es.in2.issuer.backend.shared.domain.model.enums.CredentialStatusEnum;

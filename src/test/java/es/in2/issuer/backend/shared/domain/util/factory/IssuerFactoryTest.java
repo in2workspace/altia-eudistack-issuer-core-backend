@@ -1,8 +1,8 @@
 package es.in2.issuer.backend.shared.domain.util.factory;
 
+import static org.mockito.Mockito.*;
 import es.in2.issuer.backend.shared.domain.exception.RemoteSignatureException;
 import es.in2.issuer.backend.shared.domain.model.dto.credential.DetailedIssuer;
-import es.in2.issuer.backend.shared.domain.model.dto.credential.SimpleIssuer;
 import es.in2.issuer.backend.shared.domain.service.impl.SigningRecoveryServiceImpl;
 import es.in2.issuer.backend.signing.domain.service.impl.QtspIssuerServiceImpl;
 import es.in2.issuer.backend.signing.infrastructure.config.DefaultSignerConfig;
@@ -18,7 +18,7 @@ import java.util.concurrent.TimeoutException;
 
 import static es.in2.issuer.backend.backoffice.domain.util.Constants.DID_ELSI;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.Mockito.*;
+
 
 @ExtendWith(MockitoExtension.class)
 class IssuerFactoryTest {

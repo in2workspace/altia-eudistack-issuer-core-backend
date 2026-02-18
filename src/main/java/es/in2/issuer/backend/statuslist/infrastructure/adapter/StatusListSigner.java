@@ -2,11 +2,6 @@ package es.in2.issuer.backend.statuslist.infrastructure.adapter;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import es.in2.issuer.backend.shared.domain.exception.RemoteSignatureException;
-import es.in2.issuer.backend.shared.domain.model.dto.SignatureConfiguration;
-import es.in2.issuer.backend.shared.domain.model.dto.SignatureRequest;
-import es.in2.issuer.backend.shared.domain.model.dto.SignedData;
-import es.in2.issuer.backend.shared.domain.model.enums.SignatureType;
 import es.in2.issuer.backend.signing.domain.exception.SigningException;
 import es.in2.issuer.backend.signing.domain.model.SigningContext;
 import es.in2.issuer.backend.signing.domain.model.SigningRequest;
@@ -22,7 +17,6 @@ import reactor.core.publisher.Mono;
 import java.util.Map;
 
 import static es.in2.issuer.backend.statuslist.domain.util.Preconditions.requireNonNullParam;
-import static java.util.Collections.emptyMap;
 
 @RequiredArgsConstructor
 @Component

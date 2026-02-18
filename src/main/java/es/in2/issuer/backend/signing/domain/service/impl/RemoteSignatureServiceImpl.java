@@ -1,11 +1,12 @@
 package es.in2.issuer.backend.signing.domain.service.impl;
 
+import es.in2.issuer.backend.shared.domain.exception.*;
+import java.util.*;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import es.in2.issuer.backend.shared.domain.exception.*;
 import es.in2.issuer.backend.shared.domain.model.dto.SignatureRequest;
 import es.in2.issuer.backend.shared.domain.model.dto.SignedData;
-import es.in2.issuer.backend.shared.domain.service.*;
+import es.in2.issuer.backend.shared.domain.service.DeferredCredentialMetadataService;
 import es.in2.issuer.backend.shared.domain.util.HttpUtils;
 import es.in2.issuer.backend.shared.domain.util.JwtUtils;
 import es.in2.issuer.backend.signing.domain.exception.SignatureProcessingException;
@@ -27,7 +28,6 @@ import reactor.util.retry.Retry;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.*;
 
 import static es.in2.issuer.backend.backoffice.domain.util.Constants.*;
 

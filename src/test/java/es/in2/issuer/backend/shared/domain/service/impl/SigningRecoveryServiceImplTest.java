@@ -75,10 +75,10 @@ class SigningRecoveryServiceImplTest {
         assertThat(procedure.getCredentialStatus()).isEqualTo(CredentialStatusEnum.PEND_SIGNATURE);
 
         verify(emailService).sendPendingSignatureCredentialNotification(
-                eq(email),
-                eq("email.pending-credential-notification"),
-                eq(procedureId),
-                eq(domain)
+                email,
+                "email.pending-credential-notification",
+                procedureId,
+                domain
         );
     }
 

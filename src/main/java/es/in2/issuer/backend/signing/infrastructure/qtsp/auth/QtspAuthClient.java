@@ -1,5 +1,6 @@
 package es.in2.issuer.backend.signing.infrastructure.qtsp.auth;
 
+import java.util.*;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import es.in2.issuer.backend.signing.domain.exception.AccessTokenException;
@@ -21,7 +22,6 @@ import reactor.core.publisher.Mono;
 
 import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
-import java.util.*;
 
 import static es.in2.issuer.backend.backoffice.domain.util.Constants.CREDENTIAL_ID;
 import static es.in2.issuer.backend.backoffice.domain.util.Constants.SIGNATURE_REMOTE_SCOPE_CREDENTIAL;

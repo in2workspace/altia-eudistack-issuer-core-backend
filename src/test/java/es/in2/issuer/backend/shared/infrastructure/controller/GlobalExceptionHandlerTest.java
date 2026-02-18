@@ -1,4 +1,5 @@
 package es.in2.issuer.backend.shared.infrastructure.controller;
+import static org.mockito.Mockito.*;
 
 import es.in2.issuer.backend.shared.domain.exception.*;
 import es.in2.issuer.backend.shared.domain.model.dto.GlobalErrorMessage;
@@ -20,7 +21,6 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.Mockito.*;
 
 //todo make recursive
 class GlobalExceptionHandlerTest {
