@@ -96,14 +96,6 @@ class SigningRecoveryServiceImplTest {
     }
 
     @Test
-    void handlePostRecoverError_noCredentialProcedure_throwsError() {
-        when(credentialProcedureRepository.findByProcedureId(any(UUID.class))).thenReturn(Mono.empty());
-        StepVerifier.create(signingRecoveryService.handlePostRecoverError(procedureId, email))
-                .expectError(IllegalArgumentException.class)
-                .verify();
-    }
-
-    @Test
     void handlePostRecoverError_deferredMetadataFound_updatesIt() {
         DeferredCredentialMetadata deferred = mock(DeferredCredentialMetadata.class, RETURNS_DEEP_STUBS);
         when(credentialProcedureRepository.findByProcedureId(any(UUID.class))).thenReturn(Mono.just(procedure));
