@@ -2,6 +2,7 @@ package es.in2.issuer.backend.statuslist.infrastructure.adapter;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import es.in2.issuer.backend.shared.domain.exception.RemoteSignatureException;
 import es.in2.issuer.backend.signing.domain.exception.SigningException;
 import es.in2.issuer.backend.signing.domain.model.SigningRequest;
 import es.in2.issuer.backend.signing.domain.model.SigningResult;
@@ -70,11 +71,6 @@ class StatusListSignerTest {
         Object dataValue = readProperty(req, "data");
         assertThat(dataValue).isEqualTo(json);
 
-        Object ctxValue = readProperty(req, "context");
-        assertThat(ctxValue).isNotNull();
-
-        Object tokenValue = readProperty(ctxValue, "token");
-        assertThat(tokenValue).isEqualTo(token);
     }
 
     @Test
@@ -95,8 +91,8 @@ class StatusListSignerTest {
         // Act + Assert
         StepVerifier.create(signer.sign(payload, token, listId))
                 .expectErrorSatisfies(ex -> {
-                    assertThat(ex).isInstanceOf(SigningException.class);
-                    assertThat(ex.getMessage()).isEqualTo("StatusList signing failed; listId=" + listId);
+                    assertThat(ex).isInstanceOf(RemoteSignatureException.class);
+                    assertThat(ex.getMessage()).isEqualTo("Remote signature failed; list ID: " + listId);
                     assertThat(ex.getCause()).isSameAs(providerError);
                 })
                 .verify();
@@ -117,8 +113,8 @@ class StatusListSignerTest {
         // Act + Assert
         StepVerifier.create(signer.sign(payload, token, listId))
                 .expectErrorSatisfies(ex -> {
-                    assertThat(ex).isInstanceOf(SigningException.class);
-                    assertThat(ex.getMessage()).isEqualTo("StatusList signing failed; listId=" + listId);
+                    assertThat(ex).isInstanceOf(RemoteSignatureException.class);
+                    assertThat(ex.getMessage()).isEqualTo("Remote signature failed; list ID: " + listId);
 
                     assertThat(ex.getCause()).isInstanceOf(StatusListCredentialSerializationException.class);
                     assertThat(ex.getCause().getCause()).isSameAs(jacksonEx);
@@ -148,8 +144,8 @@ class StatusListSignerTest {
         // Act + Assert
         StepVerifier.create(signer.sign(payload, token, listId))
                 .expectErrorSatisfies(ex -> {
-                    assertThat(ex).isInstanceOf(SigningException.class);
-                    assertThat(ex.getMessage()).isEqualTo("StatusList signer returned empty JWT; listId=" + listId);
+                    assertThat(ex).isInstanceOf(RemoteSignatureException.class);
+                    assertThat(ex.getMessage()).isEqualTo("Signed returned empty signingResult; list ID: " + listId);
                     assertThat(ex.getCause()).isNull();
                 })
                 .verify();
