@@ -4,7 +4,7 @@ import es.in2.issuer.backend.shared.domain.exception.*;
 import es.in2.issuer.backend.shared.domain.model.dto.GlobalErrorMessage;
 import es.in2.issuer.backend.shared.domain.util.GlobalErrorTypes;
 import es.in2.issuer.backend.shared.infrastructure.controller.error.ErrorResponseFactory;
-import es.in2.issuer.backend.signing.domain.exception.SignedDataParsingException;
+import es.in2.issuer.backend.signing.domain.exception.SigningResultParsingException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -118,10 +118,10 @@ public class GlobalExceptionHandler {
         );
     }
 
-    @ExceptionHandler(SignedDataParsingException.class)
+    @ExceptionHandler(SigningResultParsingException.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public Mono<GlobalErrorMessage> handleSignedDataParsingException(
-            SignedDataParsingException ex,
+            SigningResultParsingException ex,
             ServerHttpRequest request
     ) {
         return errors.handleWith(

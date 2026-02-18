@@ -2,8 +2,8 @@ package es.in2.issuer.backend.signing.domain.service.impl;
 
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import es.in2.issuer.backend.shared.domain.model.dto.SignatureRequest;
 import es.in2.issuer.backend.signing.domain.exception.OrganizationIdentifierNotFoundException;
+import es.in2.issuer.backend.signing.domain.model.SigningRequest;
 import es.in2.issuer.backend.signing.infrastructure.config.RemoteSignatureConfig;
 import es.in2.issuer.backend.signing.infrastructure.qtsp.auth.QtspAuthClient;
 import es.in2.issuer.backend.shared.domain.util.HttpUtils;
@@ -46,7 +46,7 @@ class QtspIssuerServiceImplTest {
 
     @Test
     void validateCredentials_returnsTrueWhenValid() {
-        when(qtspAuthClient.requestAccessToken(any(SignatureRequest.class), anyString()))
+        when(qtspAuthClient.requestAccessToken(any(SigningRequest.class), anyString()))
                 .thenReturn(Mono.just("token"));
 
         when(remoteSignatureConfig.getRemoteSignatureCredentialId()).thenReturn("credId");
@@ -62,7 +62,7 @@ class QtspIssuerServiceImplTest {
 
     @Test
     void validateCredentials_returnsFalseWhenInvalid() {
-        when(qtspAuthClient.requestAccessToken(any(SignatureRequest.class), anyString()))
+        when(qtspAuthClient.requestAccessToken(any(SigningRequest.class), anyString()))
                 .thenReturn(Mono.just("token"));
 
         when(remoteSignatureConfig.getRemoteSignatureCredentialId()).thenReturn("credId");
@@ -152,7 +152,7 @@ class QtspIssuerServiceImplTest {
         when(remoteSignatureConfig.getRemoteSignatureCredentialId()).thenReturn("credId");
         when(remoteSignatureConfig.getRemoteSignatureDomain()).thenReturn("https://domain");
 
-        when(qtspAuthClient.requestAccessToken(any(SignatureRequest.class), anyString()))
+        when(qtspAuthClient.requestAccessToken(any(SigningRequest.class), anyString()))
                 .thenReturn(Mono.just("token-1"));
         when(qtspAuthClient.requestAccessToken(isNull(), anyString()))
                 .thenReturn(Mono.just("token-2"));
@@ -189,7 +189,7 @@ class QtspIssuerServiceImplTest {
 
     @Test
     void resolveRemoteDetailedIssuer_invalidCredentials_returnsError() {
-        when(qtspAuthClient.requestAccessToken(any(SignatureRequest.class), anyString()))
+        when(qtspAuthClient.requestAccessToken(any(SigningRequest.class), anyString()))
                 .thenReturn(Mono.just("access-token"));
 
         when(httpUtils.postRequest(contains("/csc/v2/credentials/list"), anyList(), anyString()))

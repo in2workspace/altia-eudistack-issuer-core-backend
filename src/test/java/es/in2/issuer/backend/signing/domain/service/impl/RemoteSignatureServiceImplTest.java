@@ -1,13 +1,13 @@
 package es.in2.issuer.backend.signing.domain.service.impl;
 
+import es.in2.issuer.backend.signing.domain.model.SigningContext;
+import es.in2.issuer.backend.signing.domain.model.SigningRequest;
+import es.in2.issuer.backend.signing.domain.model.SigningResult;
+import es.in2.issuer.backend.signing.domain.model.SigningType;
 import org.mockito.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import es.in2.issuer.backend.shared.domain.exception.SadException;
 import es.in2.issuer.backend.signing.domain.exception.SignatureProcessingException;
-import es.in2.issuer.backend.shared.domain.model.dto.SignatureConfiguration;
-import es.in2.issuer.backend.shared.domain.model.dto.SignatureRequest;
-import es.in2.issuer.backend.shared.domain.model.dto.SignedData;
-import es.in2.issuer.backend.shared.domain.model.enums.SignatureType;
 import es.in2.issuer.backend.shared.domain.service.DeferredCredentialMetadataService;
 import es.in2.issuer.backend.shared.domain.util.HttpUtils;
 import es.in2.issuer.backend.shared.domain.util.JwtUtils;
@@ -53,9 +53,12 @@ class RemoteSignatureServiceImplTest {
         when(remoteSignatureConfig.getRemoteSignatureDomain()).thenReturn("http://remote-signature-dss.com");
         when(remoteSignatureConfig.getRemoteSignatureSignPath()).thenReturn("/sign");
 
-        SignatureRequest req = new SignatureRequest(
-                new SignatureConfiguration(SignatureType.COSE, Map.of()),
-                "data"
+        SigningContext context = new SigningContext("token", "proc", "email");
+
+        SigningRequest req = new SigningRequest(
+                SigningType.COSE,
+                "data",
+                context
         );
 
         String endpoint = "http://remote-signature-dss.com/api/v1/sign";
@@ -65,11 +68,11 @@ class RemoteSignatureServiceImplTest {
         when(objectMapper.writeValueAsString(req)).thenReturn(reqJson);
         when(httpUtils.postRequest(eq(endpoint), anyList(), eq(reqJson))).thenReturn(Mono.just(respJson));
 
-        SignedData signedData = new SignedData(SignatureType.COSE, "signed");
-        when(objectMapper.readValue(respJson, SignedData.class)).thenReturn(signedData);
+        SigningResult signingResult = new SigningResult(SigningType.COSE, "signed");
+        when(objectMapper.readValue(respJson, SigningResult.class)).thenReturn(signingResult);
 
         StepVerifier.create(remoteSignatureService.signIssuedCredential(req, "token", "proc", "email"))
-                .expectNext(signedData)
+                .expectNext(signingResult)
                 .verifyComplete();
 
         verify(deferredCredentialMetadataService).deleteDeferredCredentialMetadataById("proc");
@@ -82,11 +85,14 @@ class RemoteSignatureServiceImplTest {
         when(remoteSignatureConfig.getRemoteSignatureCredentialId()).thenReturn("cred-id");
         when(remoteSignatureConfig.getRemoteSignatureCredentialPassword()).thenReturn("pwd");
 
-        SignatureRequest req = new SignatureRequest(
-                new SignatureConfiguration(SignatureType.JADES, Map.of()),
-                "{\"a\":1}"
-        );
+        SigningContext context = new SigningContext("token", "proc", "email");
 
+        SigningRequest req = new SigningRequest(
+                SigningType.COSE,
+                "{\"a\":1}",
+                context
+        );
+        
         when(qtspAuthClient.requestAccessToken(req, SIGNATURE_REMOTE_SCOPE_CREDENTIAL))
                 .thenReturn(Mono.just("access-token"));
 
@@ -108,11 +114,11 @@ class RemoteSignatureServiceImplTest {
         when(jwtUtils.decodePayload(jwtOrJades)).thenReturn("{\"a\":1}");
         when(jwtUtils.areJsonsEqual("{\"a\":1}", req.data())).thenReturn(true);
 
-        // final JSON that executeSigningFlow parses to SignedData
+        // final JSON that executeSigningFlow parses to SigningResult
         String signedDataJson = "{\"type\":\"JADES\",\"data\":\"" + jwtOrJades + "\"}";
         when(objectMapper.writeValueAsString(any(Map.class))).thenReturn(signedDataJson);
-        SignedData expected = new SignedData(SignatureType.JADES, jwtOrJades);
-        when(objectMapper.readValue(signedDataJson, SignedData.class)).thenReturn(expected);
+        SigningResult expected = new SigningResult(SigningType.JADES, jwtOrJades);
+        when(objectMapper.readValue(signedDataJson, SigningResult.class)).thenReturn(expected);
 
         StepVerifier.create(remoteSignatureService.signSystemCredential(req, "ignored-token-here"))
                 .expectNext(expected)
@@ -127,9 +133,12 @@ class RemoteSignatureServiceImplTest {
         when(remoteSignatureConfig.getRemoteSignatureCredentialId()).thenReturn("cred-id");
         when(remoteSignatureConfig.getRemoteSignatureCredentialPassword()).thenReturn("pwd");
 
-        SignatureRequest req = new SignatureRequest(
-                new SignatureConfiguration(SignatureType.JADES, Map.of()),
-                "{\"a\":1}"
+        SigningContext context = new SigningContext("token", "proc", "email");
+
+        SigningRequest req = new SigningRequest(
+                SigningType.COSE,
+                "{\"a\":1}",
+                context
         );
 
         when(qtspAuthClient.requestAccessToken(req,SIGNATURE_REMOTE_SCOPE_CREDENTIAL))
@@ -154,9 +163,12 @@ class RemoteSignatureServiceImplTest {
 
     @Test
     void processSignatureResponse_shouldFail_whenNoSignature() throws Exception {
-        SignatureRequest req = new SignatureRequest(
-                new SignatureConfiguration(SignatureType.JADES, Map.of()),
-                "{\"a\":1}"
+        SigningContext context = new SigningContext("token", "proc", "email");
+
+        SigningRequest req = new SigningRequest(
+                SigningType.COSE,
+                "{\"a\":1}",
+                context
         );
 
         String responseJson = "{\"DocumentWithSignature\":[]}";
@@ -170,9 +182,12 @@ class RemoteSignatureServiceImplTest {
 
     @Test
     void processSignatureResponse_shouldFail_whenPayloadMismatch() throws Exception {
-        SignatureRequest req = new SignatureRequest(
-                new SignatureConfiguration(SignatureType.JADES, Map.of()),
-                "{\"a\":1}"
+        SigningContext context = new SigningContext("token", "proc", "email");
+
+        SigningRequest req = new SigningRequest(
+                SigningType.COSE,
+                "{\"a\":1}",
+                context
         );
 
         String signedJwt = "signed-jwt";
@@ -200,10 +215,12 @@ class RemoteSignatureServiceImplTest {
         when(remoteSignatureConfig.getRemoteSignatureDomain()).thenReturn("https://api.external.com");
         when(remoteSignatureConfig.getRemoteSignatureCredentialId()).thenReturn("cred-id");
         when(remoteSignatureConfig.getRemoteSignatureCredentialPassword()).thenReturn("pwd");
+        SigningContext context = new SigningContext("token", "proc", "email");
 
-        SignatureRequest req = new SignatureRequest(
-                new SignatureConfiguration(SignatureType.JADES, Map.of()),
-                "{\"a\":1}"
+        SigningRequest req = new SigningRequest(
+                SigningType.COSE,
+                "{\"a\":1}",
+                context
         );
 
         when(qtspAuthClient.requestAccessToken(req, SIGNATURE_REMOTE_SCOPE_CREDENTIAL))
@@ -238,8 +255,8 @@ class RemoteSignatureServiceImplTest {
         String signedDataJson = "{\"type\":\"JADES\",\"data\":\"" + jwtOrJades + "\"}";
         when(objectMapper.writeValueAsString(any(Map.class))).thenReturn(signedDataJson);
 
-        SignedData expected = new SignedData(SignatureType.JADES, jwtOrJades);
-        when(objectMapper.readValue(signedDataJson, SignedData.class)).thenReturn(expected);
+        SigningResult expected = new SigningResult(SigningType.JADES, jwtOrJades);
+        when(objectMapper.readValue(signedDataJson, SigningResult.class)).thenReturn(expected);
 
         StepVerifier.create(remoteSignatureService.signIssuedCredential(req, "token", "proc-1", "mail"))
                 .expectNext(expected)

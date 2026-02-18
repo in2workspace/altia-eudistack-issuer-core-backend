@@ -2,7 +2,7 @@ package es.in2.issuer.backend.signing.infrastructure.qtsp.auth;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import es.in2.issuer.backend.shared.domain.exception.RemoteSignatureException;
-import es.in2.issuer.backend.shared.domain.model.dto.SignatureRequest;
+import es.in2.issuer.backend.signing.domain.model.SigningRequest;
 import es.in2.issuer.backend.signing.domain.service.HashGeneratorService;
 import es.in2.issuer.backend.signing.infrastructure.config.RemoteSignatureConfig;
 import es.in2.issuer.backend.shared.domain.util.HttpUtils;
@@ -55,7 +55,7 @@ class QtspAuthClientTest {
         when(httpUtils.postRequest(anyString(), anyList(), anyString()))
                 .thenReturn(Mono.just("{\"access_token\":\"tok123\"}"));
 
-        StepVerifier.create(client.requestAccessToken(SignatureRequest.builder().data("x").build(), "some-scope"))
+        StepVerifier.create(client.requestAccessToken(SigningRequest.builder().data("x").build(), "some-scope"))
                 .assertNext(token -> assertEquals("tok123", token))
                 .verifyComplete();
 
@@ -67,7 +67,7 @@ class QtspAuthClientTest {
         when(httpUtils.postRequest(anyString(), anyList(), anyString()))
                 .thenReturn(Mono.just("{\"token_type\":\"bearer\"}"));
 
-        StepVerifier.create(client.requestAccessToken(SignatureRequest.builder().data("x").build(), "some-scope"))
+        StepVerifier.create(client.requestAccessToken(SigningRequest.builder().data("x").build(), "some-scope"))
                 .expectErrorMatches(e ->
                         e instanceof RemoteSignatureException &&
                                 e.getMessage().contains("Unexpected error retrieving access token"))
@@ -82,7 +82,7 @@ class QtspAuthClientTest {
         when(httpUtils.postRequest(anyString(), anyList(), anyString()))
                 .thenReturn(Mono.just("{\"access_token\":\"tok123\"}"));
 
-        SignatureRequest sr = SignatureRequest.builder().data("{\"vc\":1}").build();
+        SigningRequest sr = SigningRequest.builder().data("{\"vc\":1}").build();
 
         StepVerifier.create(client.requestAccessToken(sr, SIGNATURE_REMOTE_SCOPE_CREDENTIAL))
                 .assertNext(token -> assertEquals("tok123", token))
@@ -128,7 +128,7 @@ class QtspAuthClientTest {
         when(httpUtils.postRequest(anyString(), anyList(), anyString()))
                 .thenReturn(Mono.error(unauthorized));
 
-        StepVerifier.create(client.requestAccessToken(SignatureRequest.builder().data("x").build(), "some-scope"))
+        StepVerifier.create(client.requestAccessToken(SigningRequest.builder().data("x").build(), "some-scope"))
                 .expectErrorMatches(e ->
                         e instanceof RemoteSignatureException &&
                                 e.getMessage().contains("Unexpected error retrieving access token"))
@@ -140,7 +140,7 @@ class QtspAuthClientTest {
         when(httpUtils.postRequest(anyString(), anyList(), anyString()))
                 .thenReturn(Mono.error(new RuntimeException("boom")));
 
-        StepVerifier.create(client.requestAccessToken(SignatureRequest.builder().data("x").build(), "some-scope"))
+        StepVerifier.create(client.requestAccessToken(SigningRequest.builder().data("x").build(), "some-scope"))
                 .expectErrorMatches(e ->
                         e instanceof RemoteSignatureException &&
                                 e.getMessage().contains("Unexpected error retrieving access token"))

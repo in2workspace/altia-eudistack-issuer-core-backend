@@ -4,7 +4,7 @@ import es.in2.issuer.backend.shared.domain.exception.*;
 import es.in2.issuer.backend.shared.domain.model.dto.GlobalErrorMessage;
 import es.in2.issuer.backend.shared.domain.util.GlobalErrorTypes;
 import es.in2.issuer.backend.shared.infrastructure.controller.error.ErrorResponseFactory;
-import es.in2.issuer.backend.signing.domain.exception.SignedDataParsingException;
+import es.in2.issuer.backend.signing.domain.exception.SigningResultParsingException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -308,7 +308,7 @@ class GlobalExceptionHandlerTest {
 
     @Test
     void handleSignedDataParsingException() {
-        var ex = new SignedDataParsingException("bad signature payload");
+        var ex = new SigningResultParsingException("bad signature payload");
         var type = GlobalErrorTypes.PARSE_ERROR.getCode();
         var title = "Signed data parsing error";
         var st = HttpStatus.INTERNAL_SERVER_ERROR;

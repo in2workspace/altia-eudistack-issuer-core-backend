@@ -1,12 +1,10 @@
 package es.in2.issuer.backend.signing.infrastructure.adapter;
-import es.in2.issuer.backend.shared.domain.model.dto.SignatureRequest;
-import es.in2.issuer.backend.shared.domain.model.dto.SignedData;
-import es.in2.issuer.backend.shared.domain.model.enums.SignatureType;
 
 import es.in2.issuer.backend.shared.domain.service.impl.SigningRecoveryServiceImpl;
 import es.in2.issuer.backend.signing.domain.exception.SigningException;
 import es.in2.issuer.backend.signing.domain.model.SigningContext;
 import es.in2.issuer.backend.signing.domain.model.SigningRequest;
+import es.in2.issuer.backend.signing.domain.model.SigningResult;
 import es.in2.issuer.backend.signing.domain.model.SigningType;
 
 import es.in2.issuer.backend.signing.domain.service.RemoteSignatureService;
@@ -40,8 +38,8 @@ class CscSignDocSigningProviderTest {
     void signReturnsSigningResultOnSuccess() {
         SigningContext context = new SigningContext("token", "procedureId", "email@example.com");
         SigningRequest request = new SigningRequest(SigningType.JADES, "data", context);
-        SignedData signedData = new SignedData(SignatureType.JADES, "signedData");
-        when(remoteSignatureService.signIssuedCredential(any(SignatureRequest.class), eq("token"), eq("procedureId"), eq("email@example.com")))
+        SigningResult signedData = new SigningResult(SigningType.JADES, "signedData");
+        when(remoteSignatureService.signIssuedCredential(any(SigningRequest.class), eq("token"), eq("procedureId"), eq("email@example.com")))
                 .thenReturn(Mono.just(signedData));
         StepVerifier.create(cscSignDocSigningProvider.sign(request))
                 .assertNext(result -> {
@@ -79,7 +77,7 @@ class CscSignDocSigningProviderTest {
     void signPropagatesRemoteSignatureServiceError() {
         SigningContext context = new SigningContext("token", "procedureId", "email@example.com");
         SigningRequest request = new SigningRequest(SigningType.JADES, "data", context);
-        when(remoteSignatureService.signIssuedCredential(any(SignatureRequest.class), eq("token"), eq("procedureId"), eq("email@example.com")))
+        when(remoteSignatureService.signIssuedCredential(any(SigningRequest.class), eq("token"), eq("procedureId"), eq("email@example.com")))
                 .thenReturn(Mono.error(new SigningException("remote error")));
         when(signingRecoveryService.handlePostRecoverError(anyString(), anyString()))
                 .thenReturn(Mono.empty());

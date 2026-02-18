@@ -6,10 +6,10 @@ import es.in2.issuer.backend.shared.domain.exception.*;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import es.in2.issuer.backend.shared.domain.model.dto.SignatureRequest;
 import es.in2.issuer.backend.shared.domain.model.dto.credential.DetailedIssuer;
 import es.in2.issuer.backend.shared.domain.util.HttpUtils;
 import es.in2.issuer.backend.signing.domain.exception.OrganizationIdentifierNotFoundException;
+import es.in2.issuer.backend.signing.domain.model.SigningRequest;
 import es.in2.issuer.backend.signing.domain.service.QtspIssuerService;
 import es.in2.issuer.backend.signing.infrastructure.config.RemoteSignatureConfig;
 import es.in2.issuer.backend.signing.infrastructure.qtsp.auth.QtspAuthClient;
@@ -49,7 +49,7 @@ public class QtspIssuerServiceImpl implements QtspIssuerService {
 
     @Override
     public Mono<Boolean> validateCredentials() {
-        SignatureRequest signatureRequest = SignatureRequest.builder().build();
+        SigningRequest signatureRequest = SigningRequest.builder().build();
         return qtspAuthClient.requestAccessToken(signatureRequest, SIGNATURE_REMOTE_SCOPE_SERVICE)
                 .flatMap(this::validateCertificate);
     }

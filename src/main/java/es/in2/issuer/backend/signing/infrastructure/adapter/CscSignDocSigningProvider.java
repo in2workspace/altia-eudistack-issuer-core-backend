@@ -1,8 +1,5 @@
 package es.in2.issuer.backend.signing.infrastructure.adapter;
 
-import es.in2.issuer.backend.shared.domain.model.dto.SignatureConfiguration;
-import es.in2.issuer.backend.shared.domain.model.dto.SignatureRequest;
-import es.in2.issuer.backend.shared.domain.model.enums.SignatureType;
 import es.in2.issuer.backend.shared.domain.service.impl.SigningRecoveryServiceImpl;
 import es.in2.issuer.backend.signing.domain.exception.SigningException;
 import es.in2.issuer.backend.signing.domain.model.SigningContext;
@@ -16,8 +13,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
-
-import java.util.Collections;
 
 /**
  * PR1 implementation: "signDoc strategy" provider.
@@ -37,7 +32,6 @@ public class CscSignDocSigningProvider implements SigningProvider {
         return Mono.defer(() -> {
             SigningRequestValidator.validate(request);
 
-            SignatureRequest legacyRequest = toLegacy(request);
             SigningContext ctx = request.context();
 
             String token = ctx.token();
@@ -49,13 +43,13 @@ public class CscSignDocSigningProvider implements SigningProvider {
             log.debug("Signing request received. type={}, issued={}, procedureId={}",
                     request.type(), isIssued, procedureId);
 
-            Mono<es.in2.issuer.backend.shared.domain.model.dto.SignedData> signingMono =
+            Mono<SigningResult> signingMono =
                     isIssued
-                            ? remoteSignatureService.signIssuedCredential(legacyRequest, token, procedureId, email)
-                            : remoteSignatureService.signSystemCredential(legacyRequest, token);
+                            ? remoteSignatureService.signIssuedCredential(request, token, procedureId, email)
+                            : remoteSignatureService.signSystemCredential(request, token);
 
             Mono<SigningResult> resultMono = signingMono
-                    .map(signedData -> new SigningResult(mapSigningType(signedData.type()), signedData.data()));
+                    .map(signingResult -> new SigningResult(mapSigningType(signingResult.type()), signingResult.data()));
 
             if (isIssued) {
                 resultMono = resultMono.onErrorResume(ex ->
@@ -71,25 +65,11 @@ public class CscSignDocSigningProvider implements SigningProvider {
         });
     }
 
-    private SigningType mapSigningType(SignatureType type) {
+    private SigningType mapSigningType(SigningType type) {
         return switch (type) {
             case JADES -> SigningType.JADES;
             case COSE -> SigningType.COSE;
         };
     }
 
-    private SignatureRequest toLegacy(SigningRequest request) {
-        SignatureType legacyType = mapType(request.type());
-        return new SignatureRequest(
-                new SignatureConfiguration(legacyType, Collections.emptyMap()),
-                request.data()
-        );
-    }
-
-    private SignatureType mapType(SigningType type) {
-        return switch (type) {
-            case JADES -> SignatureType.JADES;
-            case COSE -> SignatureType.COSE;
-        };
-    }
 }
