@@ -1,6 +1,6 @@
 package es.in2.issuer.backend.shared.domain.util.factory;
 
-import static org.mockito.Mockito.*;
+
 import es.in2.issuer.backend.shared.domain.exception.RemoteSignatureException;
 import es.in2.issuer.backend.shared.domain.model.dto.credential.DetailedIssuer;
 import es.in2.issuer.backend.shared.domain.service.impl.SigningRecoveryServiceImpl;
@@ -16,6 +16,7 @@ import reactor.test.StepVerifier;
 
 import java.util.concurrent.TimeoutException;
 
+import static org.mockito.Mockito.*;
 import static es.in2.issuer.backend.backoffice.domain.util.Constants.DID_ELSI;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 

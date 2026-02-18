@@ -23,10 +23,11 @@ import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 
-import static es.in2.issuer.backend.backoffice.domain.util.Constants.SIGNATURE_REMOTE_SCOPE_CREDENTIAL;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+import static es.in2.issuer.backend.backoffice.domain.util.Constants.SIGNATURE_REMOTE_SCOPE_CREDENTIAL;
+
 
 @ExtendWith(MockitoExtension.class)
 class QtspAuthClientTest {
@@ -110,7 +111,7 @@ class QtspAuthClientTest {
         assertTrue(hasAuth);
         assertTrue(hasCt);
 
-        verify(hashGeneratorService).generateHash(eq("{\"vc\":1}"), eq("2.16.840.1.101.3.4.2.1"));
+        verify(hashGeneratorService).generateHash("{\"vc\":1}", "2.16.840.1.101.3.4.2.1");
     }
 
     @Test

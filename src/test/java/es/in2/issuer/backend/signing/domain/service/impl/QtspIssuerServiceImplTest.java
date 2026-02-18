@@ -19,9 +19,9 @@ import reactor.test.StepVerifier;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+import static org.assertj.core.api.Assertions.assertThat;
 
 @ExtendWith(MockitoExtension.class)
 class QtspIssuerServiceImplTest {

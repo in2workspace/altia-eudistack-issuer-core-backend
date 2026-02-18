@@ -1,10 +1,8 @@
 package es.in2.issuer.backend.signing.domain.service.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import es.in2.issuer.backend.shared.domain.exception.RemoteSignatureException;
 import es.in2.issuer.backend.shared.domain.exception.SadException;
 import es.in2.issuer.backend.signing.domain.exception.SignatureProcessingException;
-import es.in2.issuer.backend.signing.domain.exception.SignedDataParsingException;
 import es.in2.issuer.backend.shared.domain.model.dto.SignatureConfiguration;
 import es.in2.issuer.backend.shared.domain.model.dto.SignatureRequest;
 import es.in2.issuer.backend.shared.domain.model.dto.SignedData;
@@ -24,16 +22,16 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 
-import static es.in2.issuer.backend.backoffice.domain.util.Constants.*;
-import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+import static es.in2.issuer.backend.backoffice.domain.util.Constants.*;
+import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
+
 
 @ExtendWith(MockitoExtension.class)
 class RemoteSignatureServiceImplTest {
@@ -88,29 +86,26 @@ class RemoteSignatureServiceImplTest {
                 "{\"a\":1}"
         );
 
-        // 1) access token (from QtspAuthClient)
-        when(qtspAuthClient.requestAccessToken(eq(req), eq(SIGNATURE_REMOTE_SCOPE_CREDENTIAL)))
+        when(qtspAuthClient.requestAccessToken(req, SIGNATURE_REMOTE_SCOPE_CREDENTIAL))
                 .thenReturn(Mono.just("access-token"));
 
-        // 2) SAD
         when(httpUtils.postRequest(eq("https://api.external.com/csc/v2/credentials/authorize"), anyList(), anyString()))
                 .thenReturn(Mono.just("{\"SAD\":\"sad-123\"}"));
-        when(objectMapper.readValue(eq("{\"SAD\":\"sad-123\"}"), eq(Map.class)))
+        when(objectMapper.readValue("{\"SAD\":\"sad-123\"}",Map.class))
                 .thenReturn(Map.of("SAD", "sad-123"));
 
-        // 3) signDoc
         String jwtOrJades = "signed-jwt";
         String base64Signed = Base64.getEncoder().encodeToString(jwtOrJades.getBytes(StandardCharsets.UTF_8));
         String signDocResponse = "{\"DocumentWithSignature\":[\"" + base64Signed + "\"]}";
 
         when(httpUtils.postRequest(eq("https://api.external.com/csc/v2/signatures/signDoc"), anyList(), anyString()))
                 .thenReturn(Mono.just(signDocResponse));
-        when(objectMapper.readValue(eq(signDocResponse), eq(Map.class)))
+        when(objectMapper.readValue(signDocResponse, Map.class))
                 .thenReturn(Map.of("DocumentWithSignature", List.of(base64Signed)));
 
         // processSignatureResponse compares payloads
         when(jwtUtils.decodePayload(jwtOrJades)).thenReturn("{\"a\":1}");
-        when(jwtUtils.areJsonsEqual(eq("{\"a\":1}"), eq(req.data()))).thenReturn(true);
+        when(jwtUtils.areJsonsEqual("{\"a\":1}", req.data())).thenReturn(true);
 
         // final JSON that executeSigningFlow parses to SignedData
         String signedDataJson = "{\"type\":\"JADES\",\"data\":\"" + jwtOrJades + "\"}";
@@ -136,7 +131,7 @@ class RemoteSignatureServiceImplTest {
                 "{\"a\":1}"
         );
 
-        when(qtspAuthClient.requestAccessToken(eq(req), eq(SIGNATURE_REMOTE_SCOPE_CREDENTIAL)))
+        when(qtspAuthClient.requestAccessToken(req,SIGNATURE_REMOTE_SCOPE_CREDENTIAL))
                 .thenReturn(Mono.just("access-token"));
 
         when(httpUtils.postRequest(
@@ -145,7 +140,7 @@ class RemoteSignatureServiceImplTest {
                 isNull()
         )).thenReturn(Mono.just("{\"NO_SAD\":\"x\"}"));
 
-        when(objectMapper.readValue(eq("{\"NO_SAD\":\"x\"}"), eq(Map.class)))
+        when(objectMapper.readValue("{\"NO_SAD\":\"x\"}", Map.class))
                 .thenReturn(Map.of("NO_SAD", "x"));
 
         StepVerifier.create(remoteSignatureService.getSignedDocumentExternal(req))
@@ -164,7 +159,7 @@ class RemoteSignatureServiceImplTest {
         );
 
         String responseJson = "{\"DocumentWithSignature\":[]}";
-        when(objectMapper.readValue(eq(responseJson), eq(Map.class)))
+        when(objectMapper.readValue(responseJson,Map.class))
                 .thenReturn(Map.of("DocumentWithSignature", List.of()));
 
         StepVerifier.create(remoteSignatureService.processSignatureResponse(req, responseJson))
@@ -183,7 +178,7 @@ class RemoteSignatureServiceImplTest {
         String base64Signed = Base64.getEncoder().encodeToString(signedJwt.getBytes(StandardCharsets.UTF_8));
         String responseJson = "{\"DocumentWithSignature\":[\"" + base64Signed + "\"]}";
 
-        when(objectMapper.readValue(eq(responseJson), eq(Map.class)))
+        when(objectMapper.readValue(responseJson, Map.class))
                 .thenReturn(Map.of("DocumentWithSignature", List.of(base64Signed)));
 
         // decodePayload returns something different
@@ -215,7 +210,7 @@ class RemoteSignatureServiceImplTest {
 
         when(httpUtils.postRequest(eq("https://api.external.com/csc/v2/credentials/authorize"), anyList(), anyString()))
                 .thenReturn(Mono.just("{\"SAD\":\"sad-123\"}"));
-        when(objectMapper.readValue(eq("{\"SAD\":\"sad-123\"}"), eq(Map.class)))
+        when(objectMapper.readValue("{\"SAD\":\"sad-123\"}",Map.class))
                 .thenReturn(Map.of("SAD", "sad-123"));
 
         WebClientResponseException serverError = WebClientResponseException.create(
@@ -230,11 +225,10 @@ class RemoteSignatureServiceImplTest {
         String base64Signed = Base64.getEncoder().encodeToString(jwtOrJades.getBytes(StandardCharsets.UTF_8));
         String signDocResponse = "{\"DocumentWithSignature\":[\"" + base64Signed + "\"]}";
 
-        // fail twice then succeed (retry)
         when(httpUtils.postRequest(eq("https://api.external.com/csc/v2/signatures/signDoc"), anyList(), anyString()))
                 .thenReturn(Mono.error(serverError), Mono.error(serverError), Mono.just(signDocResponse));
 
-        when(objectMapper.readValue(eq(signDocResponse), eq(Map.class)))
+        when(objectMapper.readValue(signDocResponse,Map.class))
                 .thenReturn(Map.of("DocumentWithSignature", List.of(base64Signed)));
 
         when(jwtUtils.decodePayload(jwtOrJades)).thenReturn("{\"a\":1}");
@@ -250,7 +244,6 @@ class RemoteSignatureServiceImplTest {
                 .expectNext(expected)
                 .verifyComplete();
 
-        // token+sad+signDoc were attempted multiple times due to retry
         verify(httpUtils, times(3)).postRequest(eq("https://api.external.com/csc/v2/signatures/signDoc"), anyList(), anyString());
         verify(deferredCredentialMetadataService).deleteDeferredCredentialMetadataById("proc-1");
     }

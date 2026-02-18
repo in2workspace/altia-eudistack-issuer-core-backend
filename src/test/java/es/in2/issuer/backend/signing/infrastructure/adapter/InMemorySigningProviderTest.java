@@ -12,7 +12,6 @@ import reactor.test.StepVerifier;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
-import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -24,8 +23,6 @@ class InMemorySigningProviderTest {
 
     @Test
     void signReturnsJwsLikeStringForJades() {
-        InMemorySigningProvider provider = new InMemorySigningProvider();
-
         String payloadJson = "{\"foo\":\"bar\"}";
         SigningContext ctx = new SigningContext ("token","proc","email");
 
