@@ -44,9 +44,6 @@ public class RemoteSignatureServiceImpl implements RemoteSignatureService {
     private static final String SAD_NAME = "SAD";
     private static final String SERIALIZING_ERROR = "Error serializing request body to JSON";
     private final DeferredCredentialMetadataService deferredCredentialMetadataService;
-    private final List<Map.Entry<String, String>> headers = new ArrayList<>();
-    private final Map<String, Object> requestBody = new HashMap<>();
-    private String credentialID;
 
     /**
      * Signs an ISSUED credential (user-related credential).
@@ -202,7 +199,7 @@ public class RemoteSignatureServiceImpl implements RemoteSignatureService {
         } catch (JsonProcessingException e) {
             return Mono.error(new RemoteSignatureException(SERIALIZING_ERROR, e));
         }
-        headers.clear();
+        List<Map.Entry<String, String>> headers = new ArrayList<>();
         headers.add(new AbstractMap.SimpleEntry<>(HttpHeaders.AUTHORIZATION, token));
         headers.add(new AbstractMap.SimpleEntry<>(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE));
         return httpUtils.postRequest(signatureRemoteServerEndpoint, headers, signatureRequestJSON)
@@ -218,13 +215,13 @@ public class RemoteSignatureServiceImpl implements RemoteSignatureService {
     }
 
     public Mono<String> requestSad(String accessToken) {
-        credentialID = remoteSignatureConfig.getRemoteSignatureCredentialId();
+        String credentialID = remoteSignatureConfig.getRemoteSignatureCredentialId();
         int numSignatures = 1;
         String authDataId = "password";
         String authDataValue = remoteSignatureConfig.getRemoteSignatureCredentialPassword();
         String signatureGetSadEndpoint = remoteSignatureConfig.getRemoteSignatureDomain() + "/csc/v2/credentials/authorize";
 
-        requestBody.clear();
+        Map<String, Object> requestBody = new HashMap<>();
         requestBody.put(CREDENTIAL_ID, credentialID);
         requestBody.put(NUM_SIGNATURES, numSignatures);
         Map<String, String> authEntry = new HashMap<>();
@@ -238,9 +235,7 @@ public class RemoteSignatureServiceImpl implements RemoteSignatureService {
         } catch (JsonProcessingException e) {
             return Mono.error(new SadException("Error serializing JSON request body"));
         }
-
-
-        headers.clear();
+        List<Map.Entry<String, String>> headers = new ArrayList<>();
         headers.add(new AbstractMap.SimpleEntry<>(HttpHeaders.AUTHORIZATION, BEARER_PREFIX + accessToken));
         headers.add(new AbstractMap.SimpleEntry<>(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE));
         return httpUtils.postRequest(signatureGetSadEndpoint, headers, jsonBody)
@@ -265,7 +260,7 @@ public class RemoteSignatureServiceImpl implements RemoteSignatureService {
     }
 
     private Mono<String> sendSignatureRequest(SignatureRequest signatureRequest, String accessToken, String sad) {
-        credentialID = remoteSignatureConfig.getRemoteSignatureCredentialId();
+        String credentialID = remoteSignatureConfig.getRemoteSignatureCredentialId();
         String signatureRemoteServerEndpoint = remoteSignatureConfig.getRemoteSignatureDomain() + "/csc/v2/signatures/signDoc";
         String signatureQualifier = "eu_eidas_aesealqc";
         String signatureFormat = "J";
@@ -273,7 +268,7 @@ public class RemoteSignatureServiceImpl implements RemoteSignatureService {
         String signAlgorithm = "OID_sign_algorithm";
 
         String base64Document = Base64.getEncoder().encodeToString(signatureRequest.data().getBytes(StandardCharsets.UTF_8));
-        requestBody.clear();
+        Map<String, Object> requestBody = new HashMap<>();
         requestBody.put(CREDENTIAL_ID, credentialID);
         requestBody.put(SAD_NAME, sad);
         requestBody.put("signatureQualifier", signatureQualifier);
@@ -293,8 +288,7 @@ public class RemoteSignatureServiceImpl implements RemoteSignatureService {
         } catch (JsonProcessingException e) {
             return Mono.error(new RuntimeException(SERIALIZING_ERROR, e));
         }
-
-        headers.clear();
+        List<Map.Entry<String, String>> headers = new ArrayList<>();
         headers.add(new AbstractMap.SimpleEntry<>(HttpHeaders.AUTHORIZATION, BEARER_PREFIX + accessToken));
         headers.add(new AbstractMap.SimpleEntry<>(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE));
         return httpUtils.postRequest(signatureRemoteServerEndpoint, headers, requestBodySignature)

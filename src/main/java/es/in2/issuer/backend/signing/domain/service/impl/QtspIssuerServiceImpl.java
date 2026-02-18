@@ -1,6 +1,5 @@
 package es.in2.issuer.backend.signing.domain.service.impl;
 
-
 import java.util.*;
 import es.in2.issuer.backend.shared.domain.exception.*;
 
@@ -43,14 +42,10 @@ public class QtspIssuerServiceImpl implements QtspIssuerService {
     private final QtspAuthClient qtspAuthClient;
     private final RemoteSignatureConfig remoteSignatureConfig;
     private final HttpUtils httpUtils;
-    private final Map<String, Object> requestBody = new HashMap<>();
-    private final List<Map.Entry<String, String>> headers = new ArrayList<>();
 
     private static final String CERTIFICATES = "certificates";
     private static final String SERIALIZING_ERROR = "Error serializing request body to JSON";
-    
-    private String credentialID;
-    private String credentialPassword;
+
 
     @Override
     public Mono<Boolean> validateCredentials() {
@@ -62,7 +57,7 @@ public class QtspIssuerServiceImpl implements QtspIssuerService {
     @Override
     public Mono<String> requestCertificateInfo(String accessToken, String credentialID) {
         String credentialsInfoEndpoint = remoteSignatureConfig.getRemoteSignatureDomain() + "/csc/v2/credentials/info";
-        requestBody.clear();
+        Map<String, Object> requestBody = new HashMap<>();
         requestBody.put(CREDENTIAL_ID, credentialID);
         requestBody.put(CERTIFICATES, "chain");
         requestBody.put("certInfo", "true");
@@ -74,7 +69,7 @@ public class QtspIssuerServiceImpl implements QtspIssuerService {
         } catch (JsonProcessingException e) {
             return Mono.error(new RuntimeException(SERIALIZING_ERROR, e));
         }
-        headers.clear();
+        List<Map.Entry<String, String>> headers = new ArrayList<>();
         headers.add(new AbstractMap.SimpleEntry<>(HttpHeaders.AUTHORIZATION, BEARER_PREFIX + accessToken));
         headers.add(new AbstractMap.SimpleEntry<>(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE));
         return httpUtils.postRequest(credentialsInfoEndpoint, headers, requestBodySignature)
@@ -160,13 +155,14 @@ public class QtspIssuerServiceImpl implements QtspIssuerService {
 
 
     private Mono<Boolean> validateCertificate(String accessToken) {
-        credentialID = remoteSignatureConfig.getRemoteSignatureCredentialId();
+        String credentialID = remoteSignatureConfig.getRemoteSignatureCredentialId();
         String credentialListEndpoint = remoteSignatureConfig.getRemoteSignatureDomain() + "/csc/v2/credentials/list";
-        headers.clear();
+
+        List<Map.Entry<String, String>> headers = new ArrayList<>();
         headers.add(new AbstractMap.SimpleEntry<>(HttpHeaders.AUTHORIZATION, BEARER_PREFIX + accessToken));
         headers.add(new AbstractMap.SimpleEntry<>(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE));
 
-        requestBody.clear();
+        Map<String, Object> requestBody = new HashMap<>();
         requestBody.put("credentialInfo", true);
         requestBody.put(CERTIFICATES, "chain");
         requestBody.put("certInfo", true);
@@ -175,12 +171,11 @@ public class QtspIssuerServiceImpl implements QtspIssuerService {
         requestBody.put("lang", 0);
         requestBody.put("clientData", "string");
         try {
-            ObjectMapper objectMapperIntern = new ObjectMapper();
-            String requestBodyJson = objectMapperIntern.writeValueAsString(requestBody);
+            String requestBodyJson = objectMapper.writeValueAsString(requestBody);
             return httpUtils.postRequest(credentialListEndpoint, headers, requestBodyJson)
                     .flatMap(responseJson -> {
                         try {
-                            Map<String, List<String>> responseMap = objectMapperIntern.readValue(responseJson, Map.class);
+                            Map<String, List<String>> responseMap = objectMapper.readValue(responseJson, Map.class);
                             List<String> receivedCredentialIDs = responseMap.get("credentialIDs");
                             boolean isValid = receivedCredentialIDs != null &&
                                     receivedCredentialIDs.stream()

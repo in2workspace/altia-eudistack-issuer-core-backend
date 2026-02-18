@@ -3,6 +3,7 @@ import es.in2.issuer.backend.shared.domain.model.dto.SignatureRequest;
 import es.in2.issuer.backend.shared.domain.model.dto.SignedData;
 import es.in2.issuer.backend.shared.domain.model.enums.SignatureType;
 
+import es.in2.issuer.backend.shared.domain.service.impl.SigningRecoveryServiceImpl;
 import es.in2.issuer.backend.signing.domain.exception.SigningException;
 import es.in2.issuer.backend.signing.domain.model.SigningContext;
 import es.in2.issuer.backend.signing.domain.model.SigningRequest;
@@ -28,6 +29,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 class CscSignDocSigningProviderTest {
     @Mock
     private RemoteSignatureService remoteSignatureService;
+
+    @Mock
+    private SigningRecoveryServiceImpl signingRecoveryService;
 
     @InjectMocks
     private CscSignDocSigningProvider cscSignDocSigningProvider;
@@ -76,7 +80,9 @@ class CscSignDocSigningProviderTest {
         SigningContext context = new SigningContext("token", "procedureId", "email@example.com");
         SigningRequest request = new SigningRequest(SigningType.JADES, "data", context);
         when(remoteSignatureService.signIssuedCredential(any(SignatureRequest.class), eq("token"), eq("procedureId"), eq("email@example.com")))
-                .thenReturn(Mono.error(new RuntimeException("remote error")));
+                .thenReturn(Mono.error(new SigningException("remote error")));
+        when(signingRecoveryService.handlePostRecoverError(anyString(), anyString()))
+                .thenReturn(Mono.empty());
         StepVerifier.create(cscSignDocSigningProvider.sign(request))
                 .expectError(SigningException.class)
                 .verify();

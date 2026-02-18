@@ -62,11 +62,12 @@ public class CscSignDocSigningProvider implements SigningProvider {
                         signingRecoveryService.handlePostRecoverError(procedureId, email)
                                 .then(Mono.error(ex))
                 );
+            }else {
+                resultMono = resultMono.onErrorMap(ex ->
+                        new SigningException("Signing failed via CSC signDoc provider: " + ex.getMessage(), ex)
+                );
             }
-
-            return resultMono.onErrorMap(ex ->
-                    new SigningException("Signing failed via CSC signDoc provider: " + ex.getMessage(), ex)
-            );
+            return resultMono;
         });
     }
 
