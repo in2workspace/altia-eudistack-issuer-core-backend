@@ -24,7 +24,6 @@ public class CscSignDocSigningProvider implements SigningProvider {
     @Override
     public Mono<SigningResult> sign(SigningRequest request) {
         return Mono.defer(() -> {
-            System.out.println("test signing request1: " + request);
             SigningRequestValidator.validate(request);
 
             SigningContext ctx = request.context();
