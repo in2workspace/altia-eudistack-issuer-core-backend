@@ -44,7 +44,16 @@ public class QtspIssuerServiceImpl implements QtspIssuerService {
     private final HttpUtils httpUtils;
 
     private static final String CERTIFICATES = "certificates";
+    private static final String CERT_INFO = "certInfo";
+    private static final String AUTH_INFO = "authInfo";
+    private static final String CREDENTIAL_INFO = "credentialInfo";
+    private static final String ONLY_VALID = "onlyValid";
+    private static final String LANG = "lang";
+    private static final String CLIENT_DATA = "clientData";
+    private static final String CREDENTIAL_IDS =  "credentialIDs";
     private static final String SERIALIZING_ERROR = "Error serializing request body to JSON";
+    private static final String INFO_PATH = "/csc/v2/credentials/info";
+    private static final String LIST_PATH  = "/csc/v2/credentials/list";
 
 
     @Override
@@ -56,12 +65,12 @@ public class QtspIssuerServiceImpl implements QtspIssuerService {
 
     @Override
     public Mono<String> requestCertificateInfo(String accessToken, String credentialID) {
-        String credentialsInfoEndpoint = remoteSignatureConfig.getRemoteSignatureDomain() + "/csc/v2/credentials/info";
+        String credentialsInfoEndpoint = remoteSignatureConfig.getRemoteSignatureDomain() + INFO_PATH;
         Map<String, Object> requestBody = new HashMap<>();
         requestBody.put(CREDENTIAL_ID, credentialID);
         requestBody.put(CERTIFICATES, "chain");
-        requestBody.put("certInfo", "true");
-        requestBody.put("authInfo", "true");
+        requestBody.put(CERT_INFO, "true");
+        requestBody.put(AUTH_INFO, "true");
 
         String requestBodySignature;
         try {
@@ -156,27 +165,27 @@ public class QtspIssuerServiceImpl implements QtspIssuerService {
 
     private Mono<Boolean> validateCertificate(String accessToken) {
         String credentialID = remoteSignatureConfig.getRemoteSignatureCredentialId();
-        String credentialListEndpoint = remoteSignatureConfig.getRemoteSignatureDomain() + "/csc/v2/credentials/list";
+        String credentialListEndpoint = remoteSignatureConfig.getRemoteSignatureDomain() + LIST_PATH;
 
         List<Map.Entry<String, String>> headers = new ArrayList<>();
         headers.add(new AbstractMap.SimpleEntry<>(HttpHeaders.AUTHORIZATION, BEARER_PREFIX + accessToken));
         headers.add(new AbstractMap.SimpleEntry<>(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE));
 
         Map<String, Object> requestBody = new HashMap<>();
-        requestBody.put("credentialInfo", true);
+        requestBody.put(CREDENTIAL_INFO, true);
         requestBody.put(CERTIFICATES, "chain");
-        requestBody.put("certInfo", true);
-        requestBody.put("authInfo", true);
-        requestBody.put("onlyValid", true);
-        requestBody.put("lang", 0);
-        requestBody.put("clientData", "string");
+        requestBody.put(CERT_INFO, true);
+        requestBody.put(AUTH_INFO, true);
+        requestBody.put(ONLY_VALID, true);
+        requestBody.put(LANG, 0);
+        requestBody.put(CLIENT_DATA, "string");
         try {
             String requestBodyJson = objectMapper.writeValueAsString(requestBody);
             return httpUtils.postRequest(credentialListEndpoint, headers, requestBodyJson)
                     .flatMap(responseJson -> {
                         try {
                             Map<String, List<String>> responseMap = objectMapper.readValue(responseJson, Map.class);
-                            List<String> receivedCredentialIDs = responseMap.get("credentialIDs");
+                            List<String> receivedCredentialIDs = responseMap.get(CREDENTIAL_IDS);
                             boolean isValid = receivedCredentialIDs != null &&
                                     receivedCredentialIDs.stream()
                                             .anyMatch(id -> id.trim().equalsIgnoreCase(credentialID.trim()));

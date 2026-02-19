@@ -34,13 +34,11 @@ public class SigningRecoveryServiceImpl implements SigningRecoveryService {
         UUID id = UUID.fromString(procedureId);
         String domain = appConfig.getIssuerFrontendUrl();
 
-        // Fetch once and reuse the same result
         Mono<CredentialProcedure> cachedProc = credentialProcedureRepository
                 .findByProcedureId(id)
                 .switchIfEmpty(Mono.error(new IllegalArgumentException("No CredentialProcedure for " + procedureId)))
                 .cache();
 
-        // Update operation mode and status
         Mono<Void> updateOperationMode = cachedProc
                 .flatMap(cp -> {
                     cp.setOperationMode(ASYNC);
@@ -50,7 +48,6 @@ public class SigningRecoveryServiceImpl implements SigningRecoveryService {
                             .then();
                 });
 
-        // Update deferred metadata
         Mono<Void> updateDeferredMetadata = deferredCredentialMetadataRepository.findByProcedureId(id)
                 .switchIfEmpty(Mono.fromRunnable(() ->
                         log.error("No deferred metadata found for procedureId: {}", procedureId)
@@ -62,7 +59,6 @@ public class SigningRecoveryServiceImpl implements SigningRecoveryService {
                             .then();
                 });
 
-        // Send email using provided email or fallback to updatedBy value
         Mono<Void> sendEmail = cachedProc.flatMap(cp -> {
             String org = cp.getOrganizationIdentifier();
             String updatedBy = cp.getUpdatedBy();
