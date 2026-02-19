@@ -173,7 +173,7 @@ public class RemoteSignatureServiceImpl implements RemoteSignatureService {
                     try {
                         return Mono.just(toSigningResult(response));
                     } catch (SigningResultParsingException ex) {
-                        return Mono.error(new RemoteSignatureException("Error parsing signed data", ex));
+                        return Mono.error(new SigningResultParsingException("Error parsing signed data"));
                     }
                 });
     }
