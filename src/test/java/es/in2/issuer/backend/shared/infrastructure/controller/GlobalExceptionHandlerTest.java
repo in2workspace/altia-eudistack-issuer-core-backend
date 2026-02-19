@@ -307,12 +307,12 @@ class GlobalExceptionHandlerTest {
     // -------------------- handleSignedDataParsingException --------------------
 
     @Test
-    void handleSignedDataParsingException() {
+    void handleSigningResultParsingException() {
         var ex = new SigningResultParsingException("bad signature payload");
         var type = GlobalErrorTypes.PARSE_ERROR.getCode();
-        var title = "Signed data parsing error";
+        var title = "Signing result parsing error";
         var st = HttpStatus.INTERNAL_SERVER_ERROR;
-        var fallback = "An internal signed data parsing error occurred.";
+        var fallback = "An internal signing result parsing error occurred.";
         var expected = new GlobalErrorMessage(type, title, st.value(), "bad signature payload", UUID.randomUUID().toString());
 
         when(errors.handleWith(ex, request, type, title, st, fallback)).thenReturn(Mono.just(expected));

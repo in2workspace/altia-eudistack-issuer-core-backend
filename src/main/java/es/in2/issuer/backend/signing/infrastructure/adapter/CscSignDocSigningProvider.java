@@ -53,7 +53,7 @@ public class CscSignDocSigningProvider implements SigningProvider {
                                     log.error("Error during post-recovery handling for procedureId={} and email={}", procedureId, email, recoveryEx);
                                     return Mono.empty();
                                 })
-                                .then(Mono.empty())
+                                .then(Mono.error(new SigningException("Signing failed via CSC signDoc provider: " + ex.getMessage(), ex)))
                 );
             }else {
                 resultMono = resultMono.onErrorMap(ex ->

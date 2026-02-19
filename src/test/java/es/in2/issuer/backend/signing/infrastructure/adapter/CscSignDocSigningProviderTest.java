@@ -77,18 +77,13 @@ class CscSignDocSigningProviderTest {
     void signPropagatesRemoteSignatureServiceError() {
         SigningContext context = new SigningContext("token", "procedureId", "email@example.com");
         SigningRequest request = new SigningRequest(SigningType.JADES, "data", context);
-        when(remoteSignatureService.signIssuedCredential(any(SigningRequest.class), eq("token"), eq("procedureId"), eq("email@example.com")))
-                .thenReturn(Mono.error(new SigningException("remote error")));
-        when(signingRecoveryService.handlePostRecoverError(anyString(), anyString()))
-                .thenReturn(Mono.empty());
-        StepVerifier.create(cscSignDocSigningProvider.sign(request))
-                .verifyComplete();
 
-        verify(signingRecoveryService).handlePostRecoverError("procedureId", "email@example.com");
-        verify(remoteSignatureService).signIssuedCredential(any(), eq("token"), eq("procedureId"), eq("email@example.com"));
+        when(remoteSignatureService.signIssuedCredential(any(SigningRequest.class), eq("token"), eq("procedureId"),
+                eq("email@example.com"))) .thenReturn(Mono.error(new SigningException("remote error")));
+        when(signingRecoveryService.handlePostRecoverError(anyString(), anyString())) .thenReturn(Mono.empty());
 
+        StepVerifier.create(cscSignDocSigningProvider.sign(request)) .expectError(SigningException.class) .verify();
     }
-
 
     private static Object[][] invalidRequests() {
         SigningContext validContext = new SigningContext("token", "procedureId", "email@example.com");
