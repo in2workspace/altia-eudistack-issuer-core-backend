@@ -8,11 +8,18 @@ public final class SigningRequestValidator {
     private SigningRequestValidator() {}
 
     public static void validate(SigningRequest request) {
+        validate(request, true);
+    }
+
+    public static void validate(SigningRequest request, boolean requireContextToken) {
         validateNotNull(request);
         validateType(request);
         validateData(request);
         validateContext(request);
-        validateToken(request);
+
+        if (requireContextToken) {
+            validateToken(request);
+        }
     }
 
     private static void validateNotNull(SigningRequest request) {
