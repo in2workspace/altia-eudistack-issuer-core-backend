@@ -3,6 +3,7 @@ package es.in2.issuer.backend.statuslist.infrastructure.adapter;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import es.in2.issuer.backend.shared.domain.exception.RemoteSignatureException;
+import es.in2.issuer.backend.signing.domain.model.SigningContext;
 import es.in2.issuer.backend.signing.domain.model.SigningRequest;
 import es.in2.issuer.backend.signing.domain.model.SigningResult;
 import es.in2.issuer.backend.signing.domain.model.SigningType;
@@ -28,19 +29,26 @@ public class StatusListSigner implements CredentialPayloadSigner {
         requireNonNullParam(payload, "payload");
         requireNonNullParam(token, "token");
 
-        return toSignatureRequest(payload)
+        return toSignatureRequest(payload, token)
                 .flatMap(signingProvider::sign)
                 .onErrorMap(ex -> new RemoteSignatureException("Remote signature failed; list ID: " + listId, ex))
                 .map(signedData -> extractJwt(signedData, listId));
     }
 
-    private Mono<SigningRequest> toSignatureRequest(Map<String, Object> payload) {
+    private Mono<SigningRequest> toSignatureRequest(Map<String, Object> payload, String token) {
         return Mono.fromCallable(() -> {
             String json = objectMapper.writeValueAsString(payload);
+
+            SigningContext context = SigningContext.builder()
+                    .token(token)
+                    .procedureId(null)
+                    .email(null)
+                    .build();
 
             return SigningRequest.builder()
                     .type(SigningType.JADES)
                     .data(json)
+                    .context(context)
                     .build();
         }).onErrorMap(JsonProcessingException.class, StatusListCredentialSerializationException::new);
     }
