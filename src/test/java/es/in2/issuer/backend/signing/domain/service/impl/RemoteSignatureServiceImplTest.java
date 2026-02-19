@@ -1,9 +1,9 @@
 package es.in2.issuer.backend.signing.domain.service.impl;
 
 import org.mockito.*;
-import es.in2.issuer.backend.signing.domain.model.SigningContext;
-import es.in2.issuer.backend.signing.domain.model.SigningRequest;
-import es.in2.issuer.backend.signing.domain.model.SigningResult;
+import es.in2.issuer.backend.signing.domain.model.dto.SigningContext;
+import es.in2.issuer.backend.signing.domain.model.dto.SigningRequest;
+import es.in2.issuer.backend.signing.domain.model.dto.SigningResult;
 import es.in2.issuer.backend.signing.domain.model.SigningType;
 
 import com.fasterxml.jackson.databind.ObjectMapper;

@@ -3,7 +3,7 @@ package es.in2.issuer.backend.signing.domain.service.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import es.in2.issuer.backend.signing.domain.exception.OrganizationIdentifierNotFoundException;
-import es.in2.issuer.backend.signing.domain.model.SigningRequest;
+import es.in2.issuer.backend.signing.domain.model.dto.SigningRequest;
 import es.in2.issuer.backend.signing.infrastructure.config.RemoteSignatureConfig;
 import es.in2.issuer.backend.signing.infrastructure.qtsp.auth.QtspAuthClient;
 import es.in2.issuer.backend.shared.domain.util.HttpUtils;

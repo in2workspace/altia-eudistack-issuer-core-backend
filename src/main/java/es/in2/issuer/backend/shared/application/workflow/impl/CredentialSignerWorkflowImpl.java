@@ -23,9 +23,9 @@ import es.in2.issuer.backend.shared.domain.util.factory.LEARCredentialEmployeeFa
 import es.in2.issuer.backend.shared.domain.util.factory.LEARCredentialMachineFactory;
 import es.in2.issuer.backend.shared.domain.util.factory.LabelCredentialFactory;
 import es.in2.issuer.backend.shared.infrastructure.repository.CredentialProcedureRepository;
-import es.in2.issuer.backend.signing.domain.model.SigningContext;
-import es.in2.issuer.backend.signing.domain.model.SigningRequest;
-import es.in2.issuer.backend.signing.domain.model.SigningResult;
+import es.in2.issuer.backend.signing.domain.model.dto.SigningContext;
+import es.in2.issuer.backend.signing.domain.model.dto.SigningRequest;
+import es.in2.issuer.backend.signing.domain.model.dto.SigningResult;
 import es.in2.issuer.backend.signing.domain.model.SigningType;
 import es.in2.issuer.backend.signing.domain.spi.SigningProvider;
 import lombok.RequiredArgsConstructor;

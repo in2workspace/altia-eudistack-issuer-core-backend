@@ -1,7 +1,7 @@
 package es.in2.issuer.backend.signing.domain.spi;
 
 import es.in2.issuer.backend.signing.domain.exception.SigningException;
-import es.in2.issuer.backend.signing.domain.model.SigningRequest;
+import es.in2.issuer.backend.signing.domain.model.dto.SigningRequest;
 
 public final class SigningRequestValidator {
 

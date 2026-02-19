@@ -1,9 +1,9 @@
 package es.in2.issuer.backend.signing.infrastructure.adapter;
 
 import es.in2.issuer.backend.signing.domain.exception.SigningException;
-import es.in2.issuer.backend.signing.domain.model.SigningContext;
-import es.in2.issuer.backend.signing.domain.model.SigningRequest;
-import es.in2.issuer.backend.signing.domain.model.SigningResult;
+import es.in2.issuer.backend.signing.domain.model.dto.SigningContext;
+import es.in2.issuer.backend.signing.domain.model.dto.SigningRequest;
+import es.in2.issuer.backend.signing.domain.model.dto.SigningResult;
 import es.in2.issuer.backend.signing.domain.model.SigningType;
 import es.in2.issuer.backend.signing.domain.service.JwsSignHashService;
 import es.in2.issuer.backend.signing.domain.spi.SigningProvider;
@@ -39,7 +39,7 @@ public class CscSignHashSigningProvider implements SigningProvider {
             String procedureId = ctx != null ? ctx.procedureId() : null;
             log.debug("CSC signHash provider sign. procedureId={}", procedureId);
 
-            return qtspAuthClient.requestAccessToken(request, SIGNATURE_REMOTE_SCOPE_CREDENTIAL)
+            return qtspAuthClient.requestAccessToken(request, SIGNATURE_REMOTE_SCOPE_CREDENTIAL, false)
                     .flatMap(accessToken ->
                             qtspIssuerService.requestCertificateInfo(
                                             accessToken,

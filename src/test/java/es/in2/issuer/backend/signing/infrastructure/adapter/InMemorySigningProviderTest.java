@@ -1,7 +1,7 @@
 package es.in2.issuer.backend.signing.infrastructure.adapter;
 
-import es.in2.issuer.backend.signing.domain.model.SigningContext;
-import es.in2.issuer.backend.signing.domain.model.SigningRequest;
+import es.in2.issuer.backend.signing.domain.model.dto.SigningContext;
+import es.in2.issuer.backend.signing.domain.model.dto.SigningRequest;
 import es.in2.issuer.backend.signing.domain.model.SigningType;
 import es.in2.issuer.backend.signing.domain.exception.SigningException;
 import org.junit.jupiter.api.Test;

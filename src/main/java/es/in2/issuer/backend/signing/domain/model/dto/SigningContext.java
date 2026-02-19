@@ -1,4 +1,4 @@
-package es.in2.issuer.backend.signing.domain.model;
+package es.in2.issuer.backend.signing.domain.model.dto;
 
 import lombok.Builder;
 

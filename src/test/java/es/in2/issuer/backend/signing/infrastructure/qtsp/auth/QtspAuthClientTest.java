@@ -2,7 +2,7 @@ package es.in2.issuer.backend.signing.infrastructure.qtsp.auth;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import es.in2.issuer.backend.shared.domain.exception.RemoteSignatureException;
-import es.in2.issuer.backend.signing.domain.model.SigningRequest;
+import es.in2.issuer.backend.signing.domain.model.dto.SigningRequest;
 import es.in2.issuer.backend.signing.domain.service.HashGeneratorService;
 import es.in2.issuer.backend.signing.infrastructure.config.RemoteSignatureConfig;
 import es.in2.issuer.backend.shared.domain.util.HttpUtils;
