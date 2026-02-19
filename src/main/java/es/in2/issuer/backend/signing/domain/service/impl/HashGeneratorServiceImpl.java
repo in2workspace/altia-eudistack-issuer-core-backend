@@ -25,16 +25,18 @@ public class HashGeneratorServiceImpl implements  HashGeneratorService {
     }
     @Override
     public String generateSHA256(String unsignedDocument) throws HashGenerationException {
+        if (unsignedDocument == null || unsignedDocument.isEmpty()) {
+            throw new HashGenerationException("The document cannot be null or empty");
+        }
+        byte[] hashBytes = sha256Digest(unsignedDocument.getBytes(StandardCharsets.UTF_8));
+        return Base64.getEncoder().encodeToString(hashBytes);
+    }
+
+    @Override
+    public byte[] sha256Digest(byte[] input) throws HashGenerationException {
         try {
-            if (unsignedDocument == null || unsignedDocument.isEmpty()) {
-                throw new HashGenerationException("The document cannot be null or empty");
-            }
-
-            byte[] documentBytes = unsignedDocument.getBytes(StandardCharsets.UTF_8);
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hashBytes = digest.digest(documentBytes);
-
-            return Base64.getEncoder().encodeToString(hashBytes);
+            return digest.digest(input);
         } catch (NoSuchAlgorithmException e) {
             throw new HashGenerationException("SHA-256 algorithm not supported", e);
         }
