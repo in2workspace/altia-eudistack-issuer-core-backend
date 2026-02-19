@@ -46,8 +46,6 @@ class QtspAuthClientTest {
         when(remoteSignatureConfig.getRemoteSignatureDomain()).thenReturn("https://qtsp");
         when(remoteSignatureConfig.getRemoteSignatureClientId()).thenReturn("clientId");
         when(remoteSignatureConfig.getRemoteSignatureClientSecret()).thenReturn("clientSecret");
-        when(remoteSignatureConfig.getRemoteSignatureCredentialId()).thenReturn("credId");
-        when(remoteSignatureConfig.getRemoteSignatureCredentialPassword()).thenReturn("credPwd");
     }
 
     @Test

@@ -91,7 +91,7 @@ class StatusListSignerTest {
         StepVerifier.create(signer.sign(payload, token, listId))
                 .expectErrorSatisfies(ex -> {
                     assertThat(ex).isInstanceOf(RemoteSignatureException.class);
-                    assertThat(ex.getMessage()).isEqualTo("Remote signature failed; list ID: " + listId);
+                    assertThat(ex.getMessage()).isEqualTo("StatusList signing failed; list ID: " + listId);
                     assertThat(ex.getCause()).isSameAs(providerError);
                 })
                 .verify();
@@ -113,7 +113,7 @@ class StatusListSignerTest {
         StepVerifier.create(signer.sign(payload, token, listId))
                 .expectErrorSatisfies(ex -> {
                     assertThat(ex).isInstanceOf(RemoteSignatureException.class);
-                    assertThat(ex.getMessage()).isEqualTo("Remote signature failed; list ID: " + listId);
+                    assertThat(ex.getMessage()).isEqualTo("StatusList signing failed; list ID: " + listId);
 
                     assertThat(ex.getCause()).isInstanceOf(StatusListCredentialSerializationException.class);
                     assertThat(ex.getCause().getCause()).isSameAs(jacksonEx);
@@ -144,7 +144,7 @@ class StatusListSignerTest {
         StepVerifier.create(signer.sign(payload, token, listId))
                 .expectErrorSatisfies(ex -> {
                     assertThat(ex).isInstanceOf(RemoteSignatureException.class);
-                    assertThat(ex.getMessage()).isEqualTo("Signed returned empty signingResult; list ID: " + listId);
+                    assertThat(ex.getMessage()).isEqualTo("Signer returned empty signingResult; list ID: " + listId);
                     assertThat(ex.getCause()).isNull();
                 })
                 .verify();

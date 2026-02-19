@@ -82,8 +82,11 @@ class CscSignDocSigningProviderTest {
         when(signingRecoveryService.handlePostRecoverError(anyString(), anyString()))
                 .thenReturn(Mono.empty());
         StepVerifier.create(cscSignDocSigningProvider.sign(request))
-                .expectError(SigningException.class)
-                .verify();
+                .verifyComplete();
+
+        verify(signingRecoveryService).handlePostRecoverError("procedureId", "email@example.com");
+        verify(remoteSignatureService).signIssuedCredential(any(), eq("token"), eq("procedureId"), eq("email@example.com"));
+
     }
 
 
