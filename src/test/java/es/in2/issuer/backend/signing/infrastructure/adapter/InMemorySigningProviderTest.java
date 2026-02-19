@@ -60,8 +60,8 @@ class InMemorySigningProviderTest {
         SigningRequest request = new SigningRequest(SigningType.COSE, base64, context);
         StepVerifier.create(provider.sign(request))
                 .assertNext(result -> {
-                    assert result.type() == SigningType.COSE;
-                    assert result.data().equals(base64);
+                    assertEquals(SigningType.COSE, result.type());
+                    assertEquals(result.data(),base64);
                 })
                 .verifyComplete();
     }

@@ -1,6 +1,6 @@
 package es.in2.issuer.backend.signing.infrastructure.adapter;
 
-import es.in2.issuer.backend.shared.domain.service.impl.SigningRecoveryServiceImpl;
+import es.in2.issuer.backend.shared.domain.service.SigningRecoveryService;
 import es.in2.issuer.backend.signing.domain.exception.SigningException;
 import es.in2.issuer.backend.signing.domain.model.SigningContext;
 import es.in2.issuer.backend.signing.domain.model.SigningRequest;
@@ -19,7 +19,7 @@ import reactor.core.publisher.Mono;
 public class CscSignDocSigningProvider implements SigningProvider {
 
     private final RemoteSignatureService remoteSignatureService;
-    private final SigningRecoveryServiceImpl signingRecoveryService;
+    private final SigningRecoveryService signingRecoveryService;
 
     @Override
     public Mono<SigningResult> sign(SigningRequest request) {
@@ -50,7 +50,7 @@ public class CscSignDocSigningProvider implements SigningProvider {
                         signingRecoveryService.handlePostRecoverError(procedureId, email)
                                 .onErrorResume(recoveryEx -> {
                                     log.error("Error during post-recovery handling for procedureId={} and email={}", procedureId, email, recoveryEx);
-                                    return Mono.empty();
+                                    return Mono.error(new SigningException("Error during post-recovery handling: " + ex.getMessage(), ex));
                                 })
                                 .then(Mono.error(new SigningException("Signing failed via CSC signDoc provider: " + ex.getMessage(), ex)))
                 );
