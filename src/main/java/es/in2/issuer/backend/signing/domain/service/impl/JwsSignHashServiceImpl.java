@@ -2,7 +2,6 @@ package es.in2.issuer.backend.signing.domain.service.impl;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import es.in2.issuer.backend.shared.domain.exception.RemoteSignatureException;
-import es.in2.issuer.backend.signing.domain.exception.HashGenerationException;
 import es.in2.issuer.backend.signing.domain.service.HashGeneratorService;
 import es.in2.issuer.backend.signing.domain.service.JwsSignHashService;
 import es.in2.issuer.backend.signing.domain.util.Base64UrlUtils;
@@ -12,9 +11,6 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -23,10 +19,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class JwsSignHashServiceImpl implements JwsSignHashService {
 
-    // OID SHA-256
     public static final String HASH_ALGO_OID_SHA256 = "2.16.840.1.101.3.4.2.1";
-
-    // OID ES256 (ECDSA w/ SHA-256)
     public static final String SIGN_ALGO_OID_ES256 = "1.2.840.10045.4.3.2";
 
     private final ObjectMapper objectMapper;
