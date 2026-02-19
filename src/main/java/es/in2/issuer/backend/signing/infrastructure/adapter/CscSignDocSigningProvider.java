@@ -5,7 +5,6 @@ import es.in2.issuer.backend.signing.domain.exception.SigningException;
 import es.in2.issuer.backend.signing.domain.model.SigningContext;
 import es.in2.issuer.backend.signing.domain.model.SigningRequest;
 import es.in2.issuer.backend.signing.domain.model.SigningResult;
-import es.in2.issuer.backend.signing.domain.model.SigningType;
 import es.in2.issuer.backend.signing.domain.service.RemoteSignatureService;
 import es.in2.issuer.backend.signing.domain.spi.SigningProvider;
 import es.in2.issuer.backend.signing.domain.spi.SigningRequestValidator;
@@ -13,11 +12,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
-
-/**
- * PR1 implementation: "signDoc strategy" provider.
- * NOTE: In PR1 this is a wrapper around the existing RemoteSignatureService implementation.
- */
 
 @Slf4j
 @Service
@@ -30,6 +24,7 @@ public class CscSignDocSigningProvider implements SigningProvider {
     @Override
     public Mono<SigningResult> sign(SigningRequest request) {
         return Mono.defer(() -> {
+            System.out.println("test signing request1: " + request);
             SigningRequestValidator.validate(request);
 
             SigningContext ctx = request.context();
@@ -49,7 +44,7 @@ public class CscSignDocSigningProvider implements SigningProvider {
                             : remoteSignatureService.signSystemCredential(request, token);
 
             Mono<SigningResult> resultMono = signingMono
-                    .map(signingResult -> new SigningResult(mapSigningType(signingResult.type()), signingResult.data()));
+                    .map(signingResult -> new SigningResult(signingResult.type(), signingResult.data()));
 
             if (isIssued) {
                 resultMono = resultMono.onErrorResume(ex ->
@@ -69,8 +64,5 @@ public class CscSignDocSigningProvider implements SigningProvider {
         });
     }
 
-    private SigningType mapSigningType(SigningType type) {
-        return type;
-    }
 
 }

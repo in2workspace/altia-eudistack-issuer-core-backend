@@ -120,16 +120,16 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(SigningResultParsingException.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
-    public Mono<GlobalErrorMessage> handleSignedDataParsingException(
+    public Mono<GlobalErrorMessage> handleSigningResultParsingException(
             SigningResultParsingException ex,
             ServerHttpRequest request
     ) {
         return errors.handleWith(
                 ex, request,
                 GlobalErrorTypes.PARSE_ERROR.getCode(),
-                "Signed data parsing error",
+                "Signing result parsing error",
                 HttpStatus.INTERNAL_SERVER_ERROR,
-                "An internal signed data parsing error occurred."
+                "An internal signing result parsing error occurred."
         );
     }
 

@@ -20,6 +20,7 @@ public class InMemorySigningProvider implements SigningProvider {
 
     @Override
     public Mono<SigningResult> sign(SigningRequest request) {
+        System.out.println("test signing request2: " + request);
         return Mono.defer(() -> {
 
             SigningRequestValidator.validate(request);

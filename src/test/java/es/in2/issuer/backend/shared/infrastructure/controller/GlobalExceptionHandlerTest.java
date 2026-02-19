@@ -317,7 +317,7 @@ class GlobalExceptionHandlerTest {
 
         when(errors.handleWith(ex, request, type, title, st, fallback)).thenReturn(Mono.just(expected));
 
-        StepVerifier.create(handler.handleSignedDataParsingException(ex, request))
+        StepVerifier.create(handler.handleSigningResultParsingException(ex, request))
                 .assertNext(gem -> assertGem(gem, type, title, st, "bad signature payload"))
                 .verifyComplete();
 
