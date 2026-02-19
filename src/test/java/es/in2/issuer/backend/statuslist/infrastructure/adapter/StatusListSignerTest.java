@@ -3,7 +3,6 @@ package es.in2.issuer.backend.statuslist.infrastructure.adapter;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import es.in2.issuer.backend.shared.domain.exception.RemoteSignatureException;
-import es.in2.issuer.backend.signing.domain.exception.SigningException;
 import es.in2.issuer.backend.signing.domain.model.SigningRequest;
 import es.in2.issuer.backend.signing.domain.model.SigningResult;
 import es.in2.issuer.backend.signing.domain.spi.SigningProvider;

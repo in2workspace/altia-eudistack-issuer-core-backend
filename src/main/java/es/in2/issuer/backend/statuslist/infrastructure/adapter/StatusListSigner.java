@@ -32,7 +32,7 @@ public class StatusListSigner implements CredentialPayloadSigner {
         return toSignatureRequest(payload, token)
                 .flatMap(signingProvider::sign)
                 .onErrorMap(ex -> new RemoteSignatureException("Remote signature failed; list ID: " + listId, ex))
-                .map(signedData -> extractJwt(signedData, listId));
+                .map(signingResult -> extractJwt(signingResult, listId));
     }
 
     private Mono<SigningRequest> toSignatureRequest(Map<String, Object> payload, String token) {
@@ -54,6 +54,7 @@ public class StatusListSigner implements CredentialPayloadSigner {
     }
 
     private String extractJwt(SigningResult signingResult, Long listId) {
+        System.out.println("Signing result: " + signingResult);
         if (signingResult == null || signingResult.data() == null || signingResult.data().isBlank()) {
             throw new RemoteSignatureException("Signed returned empty signingResult; list ID: " + listId);
         }
