@@ -34,25 +34,18 @@ public class QtspAuthClient {
     private final ObjectMapper objectMapper;
     private final RemoteSignatureConfig remoteSignatureConfig;
     private final HashGeneratorService hashGeneratorService;
-    private final Map<String, Object> requestBody = new HashMap<>();
-    private final List<Map.Entry<String, String>> headers = new ArrayList<>();
     private final HttpUtils httpUtils;
 
     private static final String ACCESS_TOKEN_NAME = "access_token";
 
-    private String credentialID;
-    private String credentialPassword;
-
     public Mono<String> requestAccessToken(SigningRequest signingRequest, String scope){
-        credentialID = remoteSignatureConfig.getRemoteSignatureCredentialId();
-        credentialPassword = remoteSignatureConfig.getRemoteSignatureCredentialPassword();
         String clientId = remoteSignatureConfig.getRemoteSignatureClientId();
         String clientSecret = remoteSignatureConfig.getRemoteSignatureClientSecret();
         String grantType = "client_credentials";
         String signatureGetAccessTokenEndpoint = remoteSignatureConfig.getRemoteSignatureDomain() + "/oauth2/token";
         String hashAlgorithmOID = "2.16.840.1.101.3.4.2.1";
 
-        requestBody.clear();
+        Map<String, Object> requestBody = new HashMap<>();
         requestBody.put("grant_type", grantType);
         requestBody.put("scope", scope);
         if (scope.equals(SIGNATURE_REMOTE_SCOPE_CREDENTIAL)) {
@@ -67,7 +60,7 @@ public class QtspAuthClient {
         String basicAuthHeader = "Basic " + Base64.getEncoder()
                 .encodeToString((clientId + ":" + clientSecret).getBytes(StandardCharsets.UTF_8));
 
-        headers.clear();
+        List<Map.Entry<String, String>> headers = new ArrayList<>();
         headers.add(new AbstractMap.SimpleEntry<>(HttpHeaders.AUTHORIZATION, basicAuthHeader));
         headers.add(new AbstractMap.SimpleEntry<>(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_FORM_URLENCODED_VALUE));
         return httpUtils.postRequest(signatureGetAccessTokenEndpoint, headers, requestBodyString)
@@ -101,8 +94,8 @@ public class QtspAuthClient {
     }
 
     private String buildAuthorizationDetails(String unsignedCredential, String hashAlgorithmOID) {
-        credentialID = remoteSignatureConfig.getRemoteSignatureCredentialId();
-        credentialPassword = remoteSignatureConfig.getRemoteSignatureCredentialPassword();
+        String credentialID = remoteSignatureConfig.getRemoteSignatureCredentialId();
+        String credentialPassword = remoteSignatureConfig.getRemoteSignatureCredentialPassword();
         try {
             Map<String, Object> authorizationDetails = new HashMap<>();
             authorizationDetails.put("type", SIGNATURE_REMOTE_SCOPE_CREDENTIAL);

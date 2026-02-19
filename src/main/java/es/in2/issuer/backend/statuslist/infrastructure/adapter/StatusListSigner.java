@@ -31,7 +31,7 @@ public class StatusListSigner implements CredentialPayloadSigner {
 
         return toSignatureRequest(payload, token)
                 .flatMap(signingProvider::sign)
-                .onErrorMap(ex -> new RemoteSignatureException("Remote signature failed; list ID: " + listId, ex))
+                .onErrorMap(ex -> new RemoteSignatureException("StatusList signing failed; list ID: " + listId, ex))
                 .map(signingResult -> extractJwt(signingResult, listId));
     }
 
@@ -56,7 +56,7 @@ public class StatusListSigner implements CredentialPayloadSigner {
     private String extractJwt(SigningResult signingResult, Long listId) {
         System.out.println("Signing result: " + signingResult);
         if (signingResult == null || signingResult.data() == null || signingResult.data().isBlank()) {
-            throw new RemoteSignatureException("Signed returned empty signingResult; list ID: " + listId);
+            throw new RemoteSignatureException("Signer returned empty signingResult; list ID: " + listId);
         }
         return signingResult.data();
     }

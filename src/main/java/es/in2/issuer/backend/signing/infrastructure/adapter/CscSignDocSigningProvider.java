@@ -54,7 +54,11 @@ public class CscSignDocSigningProvider implements SigningProvider {
             if (isIssued) {
                 resultMono = resultMono.onErrorResume(ex ->
                         signingRecoveryService.handlePostRecoverError(procedureId, email)
-                                .then(Mono.error(ex))
+                                .onErrorResume(recoveryEx -> {
+                                    log.error("Error during post-recovery handling for procedureId={} and email={}", procedureId, email, recoveryEx);
+                                    return Mono.empty();
+                                })
+                                .then(Mono.empty())
                 );
             }else {
                 resultMono = resultMono.onErrorMap(ex ->
@@ -66,10 +70,7 @@ public class CscSignDocSigningProvider implements SigningProvider {
     }
 
     private SigningType mapSigningType(SigningType type) {
-        return switch (type) {
-            case JADES -> SigningType.JADES;
-            case COSE -> SigningType.COSE;
-        };
+        return type;
     }
 
 }

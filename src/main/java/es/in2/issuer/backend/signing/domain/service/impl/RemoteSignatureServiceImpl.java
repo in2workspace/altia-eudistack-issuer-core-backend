@@ -210,7 +210,7 @@ public class RemoteSignatureServiceImpl implements RemoteSignatureService {
         log.info("Requesting signature to external service");
         return qtspAuthClient.requestAccessToken(signingRequest, SIGNATURE_REMOTE_SCOPE_CREDENTIAL)
                 .flatMap(accessToken -> requestSad(accessToken)
-                        .flatMap(sad -> sendsigningRequest(signingRequest, accessToken, sad)
+                        .flatMap(sad -> sendSigningRequest(signingRequest, accessToken, sad)
                                 .flatMap(responseJson -> processSignatureResponse(signingRequest, responseJson))));
     }
 
@@ -259,7 +259,7 @@ public class RemoteSignatureServiceImpl implements RemoteSignatureService {
                 .doOnError(error -> log.error("Error retrieving access token: {}", error.getMessage()));
     }
 
-    private Mono<String> sendsigningRequest(SigningRequest signingRequest, String accessToken, String sad) {
+    private Mono<String> sendSigningRequest(SigningRequest signingRequest, String accessToken, String sad) {
         String credentialID = remoteSignatureConfig.getRemoteSignatureCredentialId();
         String signatureRemoteServerEndpoint = remoteSignatureConfig.getRemoteSignatureDomain() + "/csc/v2/signatures/signDoc";
         String signatureQualifier = "eu_eidas_aesealqc";
