@@ -14,7 +14,7 @@ import es.in2.issuer.backend.shared.domain.model.enums.CredentialType;
 import es.in2.issuer.backend.shared.domain.service.AccessTokenService;
 import es.in2.issuer.backend.shared.domain.service.CredentialProcedureService;
 import es.in2.issuer.backend.shared.infrastructure.config.AppConfig;
-import es.in2.issuer.backend.shared.infrastructure.config.DefaultSignerConfig; // <-- NEW import
+import es.in2.issuer.backend.signing.infrastructure.config.DefaultSignerConfig; // <-- NEW import
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;

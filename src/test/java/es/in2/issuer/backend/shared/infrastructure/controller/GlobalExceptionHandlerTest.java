@@ -4,6 +4,7 @@ import es.in2.issuer.backend.shared.domain.exception.*;
 import es.in2.issuer.backend.shared.domain.model.dto.GlobalErrorMessage;
 import es.in2.issuer.backend.shared.domain.util.GlobalErrorTypes;
 import es.in2.issuer.backend.shared.infrastructure.controller.error.ErrorResponseFactory;
+import es.in2.issuer.backend.signing.domain.exception.SigningResultParsingException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -17,9 +18,9 @@ import java.text.ParseException;
 import java.util.NoSuchElementException;
 import java.util.UUID;
 
+import static org.mockito.Mockito.*;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.Mockito.*;
 
 //todo make recursive
 class GlobalExceptionHandlerTest {
@@ -306,17 +307,17 @@ class GlobalExceptionHandlerTest {
     // -------------------- handleSignedDataParsingException --------------------
 
     @Test
-    void handleSignedDataParsingException() {
-        var ex = new SignedDataParsingException("bad signature payload");
+    void handleSigningResultParsingException() {
+        var ex = new SigningResultParsingException("bad signature payload");
         var type = GlobalErrorTypes.PARSE_ERROR.getCode();
-        var title = "Signed data parsing error";
+        var title = "Signing result parsing error";
         var st = HttpStatus.INTERNAL_SERVER_ERROR;
-        var fallback = "An internal signed data parsing error occurred.";
+        var fallback = "An internal signing result parsing error occurred.";
         var expected = new GlobalErrorMessage(type, title, st.value(), "bad signature payload", UUID.randomUUID().toString());
 
         when(errors.handleWith(ex, request, type, title, st, fallback)).thenReturn(Mono.just(expected));
 
-        StepVerifier.create(handler.handleSignedDataParsingException(ex, request))
+        StepVerifier.create(handler.handleSigningResultParsingException(ex, request))
                 .assertNext(gem -> assertGem(gem, type, title, st, "bad signature payload"))
                 .verifyComplete();
 

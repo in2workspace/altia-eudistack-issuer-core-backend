@@ -13,8 +13,6 @@ import es.in2.issuer.backend.shared.domain.model.dto.credential.SimpleIssuer;
 import es.in2.issuer.backend.shared.domain.model.enums.CredentialType;
 import es.in2.issuer.backend.shared.domain.service.AccessTokenService;
 import es.in2.issuer.backend.shared.domain.service.CredentialProcedureService;
-import es.in2.issuer.backend.shared.infrastructure.config.AppConfig;
-import es.in2.issuer.backend.shared.infrastructure.config.DefaultSignerConfig;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -33,12 +31,10 @@ import static es.in2.issuer.backend.shared.domain.util.Constants.LABEL_CREDENTIA
 @RequiredArgsConstructor
 @Slf4j
 public class LabelCredentialFactory {
-    private final DefaultSignerConfig defaultSignerConfig;
     private final ObjectMapper objectMapper;
     private final CredentialProcedureService credentialProcedureService;
     private final IssuerFactory issuerFactory;
     private final AccessTokenService accessTokenService;
-    private final AppConfig appConfig;
 
     public Mono<CredentialProcedureCreationRequest> mapAndBuildLabelCredential(String procedureId, JsonNode credential, CredentialStatus credentialStatus, String operationMode, String email) {
         LabelCredential labelCredential = objectMapper.convertValue(credential, LabelCredential.class);

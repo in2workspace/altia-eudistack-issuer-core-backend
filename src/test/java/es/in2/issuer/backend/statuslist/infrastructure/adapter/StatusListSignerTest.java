@@ -3,10 +3,9 @@ package es.in2.issuer.backend.statuslist.infrastructure.adapter;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import es.in2.issuer.backend.shared.domain.exception.RemoteSignatureException;
-import es.in2.issuer.backend.shared.domain.model.dto.SignatureRequest;
-import es.in2.issuer.backend.shared.domain.model.dto.SignedData;
-import es.in2.issuer.backend.shared.domain.model.enums.SignatureType;
-import es.in2.issuer.backend.shared.domain.service.RemoteSignatureService;
+import es.in2.issuer.backend.signing.domain.model.SigningRequest;
+import es.in2.issuer.backend.signing.domain.model.SigningResult;
+import es.in2.issuer.backend.signing.domain.spi.SigningProvider;
 import es.in2.issuer.backend.statuslist.domain.exception.StatusListCredentialSerializationException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -20,28 +19,28 @@ import reactor.test.StepVerifier;
 import java.lang.reflect.Method;
 import java.util.Map;
 
+import static org.mockito.Mockito.*;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.any;
 
 @ExtendWith(MockitoExtension.class)
 class StatusListSignerTest {
 
     @Mock
-    private RemoteSignatureService remoteSignatureService;
+    private SigningProvider signingProvider;
 
     @Mock
     private ObjectMapper objectMapper;
 
     @Captor
-    private ArgumentCaptor<SignatureRequest> signatureRequestCaptor;
+    private ArgumentCaptor<SigningRequest> signingRequestCaptor;
 
     @Test
-    void sign_shouldReturnJwt_whenRemoteSignatureSucceeds() throws Exception {
+    void sign_shouldReturnJwt_whenSigningProviderSucceeds() throws Exception {
         // Arrange
-        StatusListSigner signer = new StatusListSigner(remoteSignatureService, objectMapper);
+        StatusListSigner signer = new StatusListSigner(signingProvider, objectMapper);
 
         Map<String, Object> payload = Map.of("id", "abc", "foo", "bar");
         String token = "token-123";
@@ -50,10 +49,11 @@ class StatusListSignerTest {
         String json = "{\"id\":\"abc\",\"foo\":\"bar\"}";
         when(objectMapper.writeValueAsString(payload)).thenReturn(json);
 
-        SignedData signedData = new SignedData(SignatureType.JADES, "jwt-value");
+        SigningResult signingResult = mock(SigningResult.class);
+        when(signingResult.data()).thenReturn("jwt-value");
 
-        when(remoteSignatureService.signSystemCredential(any(), eq(token)))
-                .thenReturn(Mono.just(signedData));
+        when(signingProvider.sign(any()))
+                .thenReturn(Mono.just(signingResult));
 
         // Act + Assert
         StepVerifier.create(signer.sign(payload, token, listId))
@@ -61,28 +61,21 @@ class StatusListSignerTest {
                 .verifyComplete();
 
         // Verify request contents (light but useful checks)
-        verify(remoteSignatureService, times(1)).signSystemCredential(signatureRequestCaptor.capture(), eq(token));
-        Object req = signatureRequestCaptor.getValue();
+        verify(signingProvider, times(1)).sign(signingRequestCaptor.capture());
+        SigningRequest req = signingRequestCaptor.getValue();
+
+        Object typeValue = readProperty(req, "type");
+        assertThat(typeValue).hasToString("JADES");
 
         Object dataValue = readProperty(req, "data");
         assertThat(dataValue).isEqualTo(json);
 
-        Object configValue = readProperty(req, "configuration");
-        assertThat(configValue).isNotNull();
-
-        // Using hasToString() instead of toString().isEqualTo()
-        Object typeValue = readProperty(configValue, "type");
-        assertThat(typeValue).hasToString("JADES");
-
-        Object paramsValue = readProperty(configValue, "parameters");
-        assertThat(paramsValue).isInstanceOf(Map.class);
-        assertThat((Map<?, ?>) paramsValue).isEmpty();
     }
 
     @Test
-    void sign_shouldWrapRemoteErrorsIntoRemoteSignatureException_withListId() throws Exception {
+    void sign_shouldWrapProviderErrorsIntoSigningException_withListId() throws Exception {
         // Arrange
-        StatusListSigner signer = new StatusListSigner(remoteSignatureService, objectMapper);
+        StatusListSigner signer = new StatusListSigner(signingProvider, objectMapper);
 
         Map<String, Object> payload = Map.of("a", 1);
         String token = "t";
@@ -90,24 +83,24 @@ class StatusListSignerTest {
 
         when(objectMapper.writeValueAsString(payload)).thenReturn("{\"a\":1}");
 
-        RuntimeException remoteError = new RuntimeException("boom");
-        when(remoteSignatureService.signSystemCredential(any(), eq(token)))
-                .thenReturn(Mono.error(remoteError));
+        RuntimeException providerError = new RuntimeException("boom");
+        when(signingProvider.sign(any()))
+                .thenReturn(Mono.error(providerError));
 
         // Act + Assert
         StepVerifier.create(signer.sign(payload, token, listId))
                 .expectErrorSatisfies(ex -> {
                     assertThat(ex).isInstanceOf(RemoteSignatureException.class);
-                    assertThat(ex.getMessage()).isEqualTo("Remote signature failed; list ID: " + listId);
-                    assertThat(ex.getCause()).isSameAs(remoteError);
+                    assertThat(ex.getMessage()).isEqualTo("StatusList signing failed; list ID: " + listId);
+                    assertThat(ex.getCause()).isSameAs(providerError);
                 })
                 .verify();
     }
 
     @Test
-    void sign_shouldWrapSerializationErrorIntoRemoteSignatureException_andKeepCauseChain() throws Exception {
+    void sign_shouldWrapSerializationErrorIntoSigningException_andKeepCauseChain() throws Exception {
         // Arrange
-        StatusListSigner signer = new StatusListSigner(remoteSignatureService, objectMapper);
+        StatusListSigner signer = new StatusListSigner(signingProvider, objectMapper);
 
         Map<String, Object> payload = Map.of("a", 1);
         String token = "t";
@@ -120,22 +113,20 @@ class StatusListSignerTest {
         StepVerifier.create(signer.sign(payload, token, listId))
                 .expectErrorSatisfies(ex -> {
                     assertThat(ex).isInstanceOf(RemoteSignatureException.class);
-                    assertThat(ex.getMessage()).isEqualTo("Remote signature failed; list ID: " + listId);
+                    assertThat(ex.getMessage()).isEqualTo("StatusList signing failed; list ID: " + listId);
 
-                    // Cause should be StatusListCredentialSerializationException (mapped in toSignatureRequest)
                     assertThat(ex.getCause()).isInstanceOf(StatusListCredentialSerializationException.class);
                     assertThat(ex.getCause().getCause()).isSameAs(jacksonEx);
                 })
                 .verify();
 
-        // The remote service must not be called if serialization fails
-        verifyNoInteractions(remoteSignatureService);
+        verifyNoInteractions(signingProvider);
     }
 
     @Test
-    void sign_shouldErrorWhenRemoteReturnsEmptySignedData() throws Exception {
+    void sign_shouldErrorWhenSignerReturnsEmptyJwt() throws Exception {
         // Arrange
-        StatusListSigner signer = new StatusListSigner(remoteSignatureService, objectMapper);
+        StatusListSigner signer = new StatusListSigner(signingProvider, objectMapper);
 
         Map<String, Object> payload = Map.of("a", 1);
         String token = "t";
@@ -143,14 +134,17 @@ class StatusListSignerTest {
 
         when(objectMapper.writeValueAsString(payload)).thenReturn("{\"a\":1}");
 
-        when(remoteSignatureService.signSystemCredential(any(), eq(token)))
-                .thenReturn(Mono.just(new SignedData(SignatureType.JADES, "   ")));
+        SigningResult signingResult = mock(SigningResult.class);
+        when(signingResult.data()).thenReturn("   ");
+
+        when(signingProvider.sign(any()))
+                .thenReturn(Mono.just(signingResult));
 
         // Act + Assert
         StepVerifier.create(signer.sign(payload, token, listId))
                 .expectErrorSatisfies(ex -> {
                     assertThat(ex).isInstanceOf(RemoteSignatureException.class);
-                    assertThat(ex.getMessage()).isEqualTo("Remote signer returned empty SignedData; list ID: " + listId);
+                    assertThat(ex.getMessage()).isEqualTo("Signer returned empty signingResult; list ID: " + listId);
                     assertThat(ex.getCause()).isNull();
                 })
                 .verify();
@@ -158,19 +152,14 @@ class StatusListSignerTest {
 
     @Test
     void sign_shouldThrowImmediately_whenPayloadIsNull() {
-        // Arrange
-        StatusListSigner signer = new StatusListSigner(remoteSignatureService, objectMapper);
-
-        // Act + Assert
+        StatusListSigner signer = new StatusListSigner(signingProvider, objectMapper);
         assertThrows(RuntimeException.class, () -> signer.sign(null, "token", 1L));
     }
 
     @Test
     void sign_shouldThrowImmediately_whenTokenIsNull() {
-        // Arrange
-        StatusListSigner signer = new StatusListSigner(remoteSignatureService, objectMapper);
+        StatusListSigner signer = new StatusListSigner(signingProvider, objectMapper);
 
-        // Act + Assert
         assertThatThrownBy(() -> signer.sign(Map.of("a", 1), null, 1L))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("token");

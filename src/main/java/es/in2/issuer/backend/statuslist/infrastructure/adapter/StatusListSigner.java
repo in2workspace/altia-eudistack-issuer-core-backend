@@ -3,11 +3,11 @@ package es.in2.issuer.backend.statuslist.infrastructure.adapter;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import es.in2.issuer.backend.shared.domain.exception.RemoteSignatureException;
-import es.in2.issuer.backend.shared.domain.model.dto.SignatureConfiguration;
-import es.in2.issuer.backend.shared.domain.model.dto.SignatureRequest;
-import es.in2.issuer.backend.shared.domain.model.dto.SignedData;
-import es.in2.issuer.backend.shared.domain.model.enums.SignatureType;
-import es.in2.issuer.backend.shared.domain.service.RemoteSignatureService;
+import es.in2.issuer.backend.signing.domain.model.SigningContext;
+import es.in2.issuer.backend.signing.domain.model.SigningRequest;
+import es.in2.issuer.backend.signing.domain.model.SigningResult;
+import es.in2.issuer.backend.signing.domain.model.SigningType;
+import es.in2.issuer.backend.signing.domain.spi.SigningProvider;
 import es.in2.issuer.backend.statuslist.domain.exception.StatusListCredentialSerializationException;
 import es.in2.issuer.backend.statuslist.domain.spi.CredentialPayloadSigner;
 import lombok.RequiredArgsConstructor;
@@ -17,45 +17,47 @@ import reactor.core.publisher.Mono;
 import java.util.Map;
 
 import static es.in2.issuer.backend.statuslist.domain.util.Preconditions.requireNonNullParam;
-import static java.util.Collections.emptyMap;
 
 @RequiredArgsConstructor
 @Component
 public class StatusListSigner implements CredentialPayloadSigner {
 
-    private final RemoteSignatureService remoteSignatureService;
+    private final SigningProvider signingProvider;
     private final ObjectMapper objectMapper;
 
     public Mono<String> sign(Map<String, Object> payload, String token, Long listId) {
         requireNonNullParam(payload, "payload");
         requireNonNullParam(token, "token");
 
-        return toSignatureRequest(payload)
-                .flatMap(req -> remoteSignatureService.signSystemCredential(req, token))
-                .onErrorMap(ex -> new RemoteSignatureException("Remote signature failed; list ID: " + listId, ex))
-                .map(signedData -> extractJwt(signedData, listId));
+        return toSignatureRequest(payload, token)
+                .flatMap(signingProvider::sign)
+                .onErrorMap(ex -> new RemoteSignatureException("StatusList signing failed; list ID: " + listId, ex))
+                .map(signingResult -> extractJwt(signingResult, listId));
     }
 
-    private Mono<SignatureRequest> toSignatureRequest(Map<String, Object> payload) {
+    private Mono<SigningRequest> toSignatureRequest(Map<String, Object> payload, String token) {
         return Mono.fromCallable(() -> {
             String json = objectMapper.writeValueAsString(payload);
 
-            SignatureConfiguration config = SignatureConfiguration.builder()
-                    .type(SignatureType.JADES)
-                    .parameters(emptyMap())
+            SigningContext context = SigningContext.builder()
+                    .token(token)
+                    .procedureId(null)
+                    .email(null)
                     .build();
 
-            return SignatureRequest.builder()
-                    .configuration(config)
+            return SigningRequest.builder()
+                    .type(SigningType.JADES)
                     .data(json)
+                    .context(context)
                     .build();
         }).onErrorMap(JsonProcessingException.class, StatusListCredentialSerializationException::new);
     }
 
-    private String extractJwt(SignedData signedData, Long listId) {
-        if (signedData == null || signedData.data() == null || signedData.data().isBlank()) {
-            throw new RemoteSignatureException("Remote signer returned empty SignedData; list ID: " + listId);
+    private String extractJwt(SigningResult signingResult, Long listId) {
+        if (signingResult == null || signingResult.data() == null || signingResult.data().isBlank()) {
+            throw new RemoteSignatureException("Signer returned empty signingResult; list ID: " + listId);
         }
-        return signedData.data();
+        return signingResult.data();
     }
+
 }

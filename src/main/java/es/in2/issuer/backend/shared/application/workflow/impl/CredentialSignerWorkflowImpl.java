@@ -1,6 +1,7 @@
 package es.in2.issuer.backend.shared.application.workflow.impl;
 
 
+import es.in2.issuer.backend.shared.domain.service.*;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -17,17 +18,16 @@ import es.in2.issuer.backend.shared.domain.model.dto.credential.LabelCredential;
 import es.in2.issuer.backend.shared.domain.model.dto.credential.lear.employee.LEARCredentialEmployee;
 import es.in2.issuer.backend.shared.domain.model.dto.credential.lear.machine.LEARCredentialMachine;
 import es.in2.issuer.backend.shared.domain.model.enums.CredentialStatusEnum;
-import es.in2.issuer.backend.shared.domain.service.*;
 import es.in2.issuer.backend.shared.domain.util.factory.IssuerFactory;
 import es.in2.issuer.backend.shared.domain.util.factory.LEARCredentialEmployeeFactory;
 import es.in2.issuer.backend.shared.domain.util.factory.LEARCredentialMachineFactory;
 import es.in2.issuer.backend.shared.domain.util.factory.LabelCredentialFactory;
 import es.in2.issuer.backend.shared.infrastructure.repository.CredentialProcedureRepository;
-import es.in2.issuer.backend.spi.domain.model.SigningContext;
-import es.in2.issuer.backend.spi.domain.model.SigningRequest;
-import es.in2.issuer.backend.spi.domain.model.SigningResult;
-import es.in2.issuer.backend.spi.domain.model.SigningType;
-import es.in2.issuer.backend.spi.domain.signing.SigningProvider;
+import es.in2.issuer.backend.signing.domain.model.SigningContext;
+import es.in2.issuer.backend.signing.domain.model.SigningRequest;
+import es.in2.issuer.backend.signing.domain.model.SigningResult;
+import es.in2.issuer.backend.signing.domain.model.SigningType;
+import es.in2.issuer.backend.signing.domain.spi.SigningProvider;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import nl.minvws.encoding.Base45;
@@ -42,9 +42,9 @@ import java.util.Base64;
 import java.util.List;
 import java.util.UUID;
 
+import static es.in2.issuer.backend.shared.domain.util.Constants.*;
 import static es.in2.issuer.backend.backoffice.domain.util.Constants.CWT_VC;
 import static es.in2.issuer.backend.backoffice.domain.util.Constants.JWT_VC;
-import static es.in2.issuer.backend.shared.domain.util.Constants.*;
 
 @Service
 @Slf4j
