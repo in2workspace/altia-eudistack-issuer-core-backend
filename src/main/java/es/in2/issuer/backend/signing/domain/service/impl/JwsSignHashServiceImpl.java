@@ -1,4 +1,5 @@
 package es.in2.issuer.backend.signing.domain.service.impl;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import es.in2.issuer.backend.shared.domain.exception.RemoteSignatureException;
@@ -28,16 +29,15 @@ public class JwsSignHashServiceImpl implements JwsSignHashService {
 
     /**
      * @param accessToken QTSP bearer token
-     * @param payloadJson JWT payload as JSON string (your unsigned VC payload)
-     * @param x5cChainBase64 list of DER certs in Base64 (NOT urlsafe) to put in header as 'x5c'
+     * @param headerJson JWS header as JSON string (must contain at least alg/typ and optionally x5c)
+     * @param payloadJson JWT payload as JSON string
      */
     @Override
-    public Mono<String> signJwtWithSignHash(String accessToken, String payloadJson, List<String> x5cChainBase64) {
-        String headerB64Url;
-        String payloadB64Url;
+    public Mono<String> signJwtWithSignHash(String accessToken, String headerJson, String payloadJson) {
+        final String headerB64Url;
+        final String payloadB64Url;
 
         try {
-            String headerJson = buildHeaderJson(x5cChainBase64);
             headerB64Url = Base64UrlUtils.encodeUtf8(headerJson);
             payloadB64Url = Base64UrlUtils.encodeUtf8(payloadJson);
         } catch (Exception e) {
@@ -57,7 +57,13 @@ public class JwsSignHashServiceImpl implements JwsSignHashService {
 
         return qtspSignHashClient.authorizeForHash(accessToken, hashB64Url, HASH_ALGO_OID_SHA256)
                 .flatMap(sad ->
-                        qtspSignHashClient.signHash(accessToken, sad, hashB64Url, HASH_ALGO_OID_SHA256, SIGN_ALGO_OID_ES256)
+                        qtspSignHashClient.signHash(
+                                accessToken,
+                                sad,
+                                hashB64Url,
+                                HASH_ALGO_OID_SHA256,
+                                SIGN_ALGO_OID_ES256
+                        )
                 )
                 .map(signatureB64Url -> signingInput + "." + signatureB64Url);
     }

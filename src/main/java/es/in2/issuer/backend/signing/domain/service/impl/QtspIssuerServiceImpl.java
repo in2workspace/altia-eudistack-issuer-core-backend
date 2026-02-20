@@ -167,25 +167,6 @@ public class QtspIssuerServiceImpl implements QtspIssuerService {
         return remoteSignatureConfig.getRemoteSignatureCredentialId();
     }
 
-    @Override
-    public Mono<List<String>> extractX5cChain(String certificateInfoJson) {
-        return Mono.fromCallable(() -> {
-            JsonNode root = objectMapper.readTree(certificateInfoJson);
-            JsonNode certNode = root.path("cert");
-            JsonNode chain = certNode.path("certificates");
-            if (!chain.isArray()) {
-                return List.of();
-            }
-            List<String> x5c = new ArrayList<>();
-            for (JsonNode n : chain) {
-                if (n != null && n.isTextual()) {
-                    x5c.add(n.asText());
-                }
-            }
-            return x5c;
-        });
-    }
-
     private Mono<Boolean> validateCertificate(String accessToken) {
         String credentialID = remoteSignatureConfig.getRemoteSignatureCredentialId();
         String credentialListEndpoint = remoteSignatureConfig.getRemoteSignatureDomain() + LIST_PATH;

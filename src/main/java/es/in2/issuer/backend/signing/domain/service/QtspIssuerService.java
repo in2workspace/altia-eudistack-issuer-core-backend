@@ -11,6 +11,5 @@ public interface QtspIssuerService {
     Mono<DetailedIssuer> extractIssuerFromCertificateInfo(String certificateInfo);
     boolean isServerMode();
     Mono<DetailedIssuer> resolveRemoteDetailedIssuer();
-    Mono<List<String>> extractX5cChain(String certificateInfoJson);
     String getCredentialId();
 }
