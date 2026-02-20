@@ -14,7 +14,6 @@ import es.in2.issuer.backend.signing.domain.service.JwsSignHashService;
 import es.in2.issuer.backend.signing.domain.spi.SigningProvider;
 import es.in2.issuer.backend.signing.domain.spi.SigningRequestValidator;
 import es.in2.issuer.backend.signing.domain.service.QtspIssuerService;
-import es.in2.issuer.backend.signing.infrastructure.config.RemoteSignatureConfig;
 import es.in2.issuer.backend.signing.infrastructure.qtsp.auth.QtspAuthClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,7 +34,6 @@ public class CscSignHashSigningProvider implements SigningProvider {
     private final QtspIssuerService qtspIssuerService;
     private final JwsSignHashService jwsSignHashService;
     private final JadesHeaderBuilderService jadesHeaderBuilder;
-    private final RemoteSignatureConfig remoteSignatureConfig;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -55,8 +53,6 @@ public class CscSignHashSigningProvider implements SigningProvider {
             if (payload == null || payload.isBlank()) {
                 return Mono.error(new SigningException("SigningRequest.data must not be null/blank"));
             }
-
-            String credentialId = remoteSignatureConfig.getRemoteSignatureCredentialId();
 
             return qtspAuthClient.requestAccessToken(request, SIGNATURE_REMOTE_SCOPE_CREDENTIAL, false)
                     .flatMap(accessToken ->
