@@ -1,39 +1,34 @@
 package es.in2.issuer.backend.signing.domain.service.impl;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import es.in2.issuer.backend.shared.domain.exception.RemoteSignatureException;
 import es.in2.issuer.backend.signing.domain.service.HashGeneratorService;
 import es.in2.issuer.backend.signing.domain.service.JwsSignHashService;
 import es.in2.issuer.backend.signing.domain.util.Base64UrlUtils;
+import es.in2.issuer.backend.signing.domain.util.QtspRetryPolicy;
 import es.in2.issuer.backend.signing.infrastructure.qtsp.signhash.QtspSignHashClient;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
+import reactor.util.retry.Retry;
 
 import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.time.Duration;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class JwsSignHashServiceImpl implements JwsSignHashService {
 
     public static final String HASH_ALGO_OID_SHA256 = "2.16.840.1.101.3.4.2.1";
     public static final String SIGN_ALGO_OID_ES256 = "1.2.840.10045.4.3.2";
 
-    private final ObjectMapper objectMapper;
     private final HashGeneratorService hashGeneratorService;
     private final QtspSignHashClient qtspSignHashClient;
 
-    /**
-     * @param accessToken QTSP bearer token
-     * @param headerJson JWS header as JSON string (must contain at least alg/typ and optionally x5c)
-     * @param payloadJson JWT payload as JSON string
-     */
     @Override
     public Mono<String> signJwtWithSignHash(String accessToken, String headerJson, String payloadJson) {
+
         final String headerB64Url;
         final String payloadB64Url;
 
@@ -55,26 +50,45 @@ public class JwsSignHashServiceImpl implements JwsSignHashService {
             return Mono.error(new RemoteSignatureException("Failed to compute signingInput digest", e));
         }
 
-        return qtspSignHashClient.authorizeForHash(accessToken, hashB64Url, HASH_ALGO_OID_SHA256)
+        return qtspSignHashClient
+                .authorizeForHash(accessToken, hashB64Url, HASH_ALGO_OID_SHA256)
+                .retryWhen(signHashRetrySpec("csc.authorizeForHash"))
                 .flatMap(sad ->
-                        qtspSignHashClient.signHash(
-                                accessToken,
-                                sad,
-                                hashB64Url,
-                                HASH_ALGO_OID_SHA256,
-                                SIGN_ALGO_OID_ES256
-                        )
+                        qtspSignHashClient
+                                .signHash(
+                                        accessToken,
+                                        sad,
+                                        hashB64Url,
+                                        HASH_ALGO_OID_SHA256,
+                                        SIGN_ALGO_OID_ES256
+                                )
+                                .retryWhen(signHashRetrySpec("csc.signHash"))
                 )
-                .map(signatureB64Url -> signingInput + "." + signatureB64Url);
+                .map(signatureB64Url -> signingInput + "." + signatureB64Url)
+                .doOnSuccess(jwt ->
+                        log.info("signHash completed successfully. JWS length={}", jwt.length())
+                )
+                .doOnError(ex ->
+                        log.error("signHash failed after retries. reason={}", ex.getMessage(), ex)
+                );
     }
 
-    private String buildHeaderJson(List<String> x5cChainBase64) throws JsonProcessingException {
-        Map<String, Object> header = new HashMap<>();
-        header.put("alg", "ES256");
-        header.put("typ", "JWT");
-        if (x5cChainBase64 != null && !x5cChainBase64.isEmpty()) {
-            header.put("x5c", x5cChainBase64);
-        }
-        return objectMapper.writeValueAsString(header);
+    private Retry signHashRetrySpec(String operationName) {
+        return Retry.backoff(3, Duration.ofSeconds(1))
+                .maxBackoff(Duration.ofSeconds(5))
+                .jitter(0.5)
+                .filter(QtspRetryPolicy::isRecoverable)
+                .doBeforeRetry(rs -> {
+                    long attempt = rs.totalRetries() + 1;
+                    Throwable failure = rs.failure();
+                    String msg = failure != null ? failure.getMessage() : "n/a";
+
+                    log.warn(
+                            "Retrying {}. attempt={} of 3, reason={}",
+                            operationName,
+                            attempt,
+                            msg
+                    );
+                });
     }
 }

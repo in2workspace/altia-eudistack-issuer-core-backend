@@ -42,11 +42,9 @@ public class QtspSignHashClient {
         body.put(CREDENTIAL_ID, remoteSignatureConfig.getRemoteSignatureCredentialId());
         body.put(NUM_SIGNATURES, 1);
 
-        // IMPORTANT: signHash authorization uses hash + hashAlgo (array)
         body.put("hash", List.of(hashB64Url));
         body.put("hashAlgo", hashAlgoOid);
 
-        // authData: password
         Map<String, String> authEntry = new HashMap<>();
         authEntry.put(AUTH_DATA_ID, "password");
         authEntry.put(AUTH_DATA_VALUE, remoteSignatureConfig.getRemoteSignatureCredentialPassword());
@@ -88,8 +86,6 @@ public class QtspSignHashClient {
         body.put("SAD", sad);
         body.put("hash", List.of(hashB64Url));
         body.put("hashAlgo", hashAlgoOid);
-
-        // IMPORTANT: CSC expects signAlgo OID (e.g. ES256 -> 1.2.840.10045.4.3.2)
         body.put("signAlgo", signAlgoOid);
 
         String json;
