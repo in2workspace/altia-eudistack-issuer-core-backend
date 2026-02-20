@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import es.in2.issuer.backend.signing.domain.exception.SigningException;
 import es.in2.issuer.backend.signing.domain.model.JadesProfile;
 import es.in2.issuer.backend.signing.domain.model.dto.CertificateInfo;
-import es.in2.issuer.backend.signing.domain.model.dto.SigningContext;
 import es.in2.issuer.backend.signing.domain.model.dto.SigningRequest;
 import es.in2.issuer.backend.signing.domain.model.dto.SigningResult;
 import es.in2.issuer.backend.signing.domain.model.SigningType;
@@ -14,6 +13,7 @@ import es.in2.issuer.backend.signing.domain.service.JwsSignHashService;
 import es.in2.issuer.backend.signing.domain.spi.SigningProvider;
 import es.in2.issuer.backend.signing.domain.spi.SigningRequestValidator;
 import es.in2.issuer.backend.signing.domain.service.QtspIssuerService;
+import es.in2.issuer.backend.signing.infrastructure.properties.CscSigningProperties;
 import es.in2.issuer.backend.signing.infrastructure.qtsp.auth.QtspAuthClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,6 +34,7 @@ public class CscSignHashSigningProvider implements SigningProvider {
     private final QtspIssuerService qtspIssuerService;
     private final JwsSignHashService jwsSignHashService;
     private final JadesHeaderBuilderService jadesHeaderBuilder;
+    private final CscSigningProperties cscSigningProperties;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -45,38 +46,24 @@ public class CscSignHashSigningProvider implements SigningProvider {
                 return Mono.error(new SigningException("csc-sign-hash supports only JADES/JWT"));
             }
 
-            SigningContext ctx = request.context();
-            String procedureId = ctx != null ? ctx.procedureId() : null;
-            log.debug("CSC signHash provider sign. procedureId={}", procedureId);
-
-            String payload = request.data();
-            if (payload == null || payload.isBlank()) {
-                return Mono.error(new SigningException("SigningRequest.data must not be null/blank"));
-            }
+            JadesProfile profile = cscSigningProperties.signatureProfile();
 
             return qtspAuthClient.requestAccessToken(request, SIGNATURE_REMOTE_SCOPE_CREDENTIAL, false)
                     .flatMap(accessToken ->
-                            qtspIssuerService.requestCertificateInfo(accessToken,qtspIssuerService.getCredentialId())
+                            qtspIssuerService.requestCertificateInfo(accessToken, qtspIssuerService.getCredentialId())
                                     .flatMap(this::parseJsonToMap)
                                     .map(this::mapToCertificateInfo)
                                     .flatMap(certInfo -> {
-                                        String headerJson = jadesHeaderBuilder.buildHeader(certInfo, JadesProfile.JADES_B_B);
-                                        return jwsSignHashService.signJwtWithSignHash(
-                                                accessToken,
-                                                headerJson,
-                                                payload
-                                        );
+                                        String headerJson = jadesHeaderBuilder.buildHeader(certInfo, profile);
+                                        return jwsSignHashService.signJwtWithSignHash(accessToken, headerJson, request.data());
                                     })
                     )
                     .map(jwt -> new SigningResult(SigningType.JADES, jwt))
-                    .onErrorMap(ex -> {
-                        log.error("CSC signHash provider failed. procedureId={}, reason={}", procedureId, ex.getMessage(), ex);
-                        return (ex instanceof SigningException)
-                                ? ex
-                                : new SigningException("Signing failed via CSC signHash provider: " + ex.getMessage(), ex);
-                    });
+                    .onErrorMap(ex -> (ex instanceof SigningException) ? ex
+                            : new SigningException("Signing failed via CSC signHash provider: " + ex.getMessage(), ex));
         });
     }
+
 
     private Mono<Map<String, Object>> parseJsonToMap(String json) {
         return Mono.fromCallable(() ->
