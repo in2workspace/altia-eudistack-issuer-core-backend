@@ -2,6 +2,7 @@ package es.in2.issuer.backend.signing.infrastructure.config;
 
 import es.in2.issuer.backend.signing.domain.spi.SigningProvider;
 import es.in2.issuer.backend.signing.infrastructure.adapter.CscSignDocSigningProvider;
+import es.in2.issuer.backend.signing.infrastructure.adapter.CscSignHashSigningProvider;
 import es.in2.issuer.backend.signing.infrastructure.adapter.InMemorySigningProvider;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -15,18 +16,18 @@ import org.springframework.context.annotation.Configuration;
 public class SigningProviderConfig {
 
     /**
-     * Allowed values (core-only PR2):
+     * Allowed values:
      * - in-memory
      * - csc-sign-doc
-     *
-     * Values reserved for future Enterprise implementations:
      * - csc-sign-hash
      */
+
     @Value("${issuer.signing.provider:csc-sign-doc}")
     private String provider;
 
     private final InMemorySigningProvider inMemorySigningProvider;
     private final CscSignDocSigningProvider cscSignDocSigningProvider;
+    private final CscSignHashSigningProvider cscSignHashSigningProvider;
 
     @Bean
     public SigningProvider signingProvider() {
@@ -41,16 +42,14 @@ public class SigningProviderConfig {
                 log.info("SigningProvider selected: csc-sign-doc");
                 yield cscSignDocSigningProvider;
             }
-
-            //TODO: Remove when csc-sign-hash provider is implemented.
-            case "csc-sign-hash" -> throw new IllegalStateException(
-                    "Signing provider '" + provider + "' must be provided by Enterprise module. " +
-                            "Core-only build supports: in-memory, csc-sign-doc"
-            );
+            case "csc-sign-hash" -> {
+                log.info("SigningProvider selected: csc-sign-hash");
+                yield cscSignHashSigningProvider;
+            }
 
             default -> throw new IllegalStateException(
                     "Unknown signing provider '" + provider + "'. " +
-                            "Supported providers (core-only): in-memory, csc-sign-doc"
+                            "Supported providers (core-only): in-memory, csc-sign-doc, csc-sign-hash"
             );
         };
     }

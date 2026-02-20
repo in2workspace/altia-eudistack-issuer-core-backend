@@ -1,6 +1,6 @@
 package es.in2.issuer.backend.shared.domain.model.dto;
 
-import es.in2.issuer.backend.signing.domain.model.SigningResult;
+import es.in2.issuer.backend.signing.domain.model.dto.SigningResult;
 import es.in2.issuer.backend.signing.domain.model.SigningType;
 import org.junit.jupiter.api.Test;
 

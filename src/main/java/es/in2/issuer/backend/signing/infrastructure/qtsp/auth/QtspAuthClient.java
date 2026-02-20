@@ -7,7 +7,7 @@ import es.in2.issuer.backend.signing.domain.exception.AccessTokenException;
 import es.in2.issuer.backend.signing.domain.exception.AuthorizationDetailsException;
 import es.in2.issuer.backend.signing.domain.exception.HashGenerationException;
 import es.in2.issuer.backend.shared.domain.exception.RemoteSignatureException;
-import es.in2.issuer.backend.signing.domain.model.SigningRequest;
+import es.in2.issuer.backend.signing.domain.model.dto.SigningRequest;
 import es.in2.issuer.backend.signing.domain.service.HashGeneratorService;
 import es.in2.issuer.backend.shared.domain.util.HttpUtils;
 import es.in2.issuer.backend.signing.infrastructure.config.RemoteSignatureConfig;
@@ -38,7 +38,11 @@ public class QtspAuthClient {
 
     private static final String ACCESS_TOKEN_NAME = "access_token";
 
-    public Mono<String> requestAccessToken(SigningRequest signingRequest, String scope){
+    public Mono<String> requestAccessToken(SigningRequest signingRequest, String scope) {
+        return requestAccessToken(signingRequest, scope, true);
+    }
+
+    public Mono<String> requestAccessToken(SigningRequest signingRequest, String scope, boolean includeAuthorizationDetails) {
         String clientId = remoteSignatureConfig.getRemoteSignatureClientId();
         String clientSecret = remoteSignatureConfig.getRemoteSignatureClientSecret();
         String grantType = "client_credentials";
@@ -48,7 +52,7 @@ public class QtspAuthClient {
         Map<String, Object> requestBody = new HashMap<>();
         requestBody.put("grant_type", grantType);
         requestBody.put("scope", scope);
-        if (scope.equals(SIGNATURE_REMOTE_SCOPE_CREDENTIAL)) {
+        if (includeAuthorizationDetails && scope.equals(SIGNATURE_REMOTE_SCOPE_CREDENTIAL)) {
             requestBody.put("authorization_details", buildAuthorizationDetails(signingRequest.data(), hashAlgorithmOID));
         }
 

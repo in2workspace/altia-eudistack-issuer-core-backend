@@ -2,6 +2,7 @@ package es.in2.issuer.backend.signing.infrastructure.config;
 
 import es.in2.issuer.backend.signing.domain.spi.SigningProvider;
 import es.in2.issuer.backend.signing.infrastructure.adapter.CscSignDocSigningProvider;
+import es.in2.issuer.backend.signing.infrastructure.adapter.CscSignHashSigningProvider;
 import es.in2.issuer.backend.signing.infrastructure.adapter.InMemorySigningProvider;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -22,12 +23,15 @@ class SigningProviderConfigTest {
     @Mock
     private CscSignDocSigningProvider cscSignDocSigningProvider;
 
+    @Mock
+    private CscSignHashSigningProvider cscSignHashSigningProvider;
+
     @InjectMocks
     private SigningProviderConfig config;
 
     @BeforeEach
     void setup() {
-        config = new SigningProviderConfig(inMemorySigningProvider, cscSignDocSigningProvider);
+        config = new SigningProviderConfig(inMemorySigningProvider, cscSignDocSigningProvider, cscSignHashSigningProvider);
     }
 
     @Test
@@ -42,18 +46,6 @@ class SigningProviderConfigTest {
         ReflectionTestUtils.setField(config, "provider", "csc-sign-doc");
         SigningProvider provider = config.signingProvider();
         assertEquals(cscSignDocSigningProvider, provider);
-    }
-
-    @Test
-    void signingProvider_throwsOnCscSignHash() {
-        ReflectionTestUtils.setField(config, "provider", "csc-sign-hash");
-
-        IllegalStateException ex = assertThrows(
-                IllegalStateException.class,
-                () -> config.signingProvider()
-        );
-
-        assertTrue(ex.getMessage().contains("must be provided by Enterprise module"));
     }
 
     @Test
