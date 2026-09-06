@@ -67,7 +67,7 @@ public class CscV2Adapter implements CscPort {
 
     @Override
     public Mono<Boolean> validateCredentialId(RemoteSignatureDto cfg, String accessToken, String credentialId) {
-        CscV2CredentialsListRequest body = new CscV2CredentialsListRequest(true, CHAIN, true, true, true, 0, "string");
+        CscV2CredentialsListRequest body = new CscV2CredentialsListRequest(true, CHAIN, true, true, true, "en-US", "string");
 
         String url = cfg.url() + CscV2Paths.LIST;
         return post(url, accessToken, body)
@@ -83,7 +83,7 @@ public class CscV2Adapter implements CscPort {
 
     @Override
     public Mono<List<String>> listCredentialIds(RemoteSignatureDto cfg, String accessToken) {
-        CscV2CredentialsListRequest body = new CscV2CredentialsListRequest(true, CHAIN, true, true, true, 0, "string");
+        CscV2CredentialsListRequest body = new CscV2CredentialsListRequest(true, CHAIN, true, true, true, "en-US", "string");
         return post(cfg.url() + CscV2Paths.LIST, accessToken, body)
                 .flatMap(json -> Mono.fromCallable(() -> {
                     CscV2CredentialsListResponse resp = objectMapper.readValue(json, CscV2CredentialsListResponse.class);
@@ -177,7 +177,7 @@ public class CscV2Adapter implements CscPort {
                 List.of(Map.of(
                         "document", docB64,
                         "signature_format", "J",
-                        "conformance_level", "Ades-B",
+                        "conformance_level", "Ades-B-B",
                         "signAlgo", signAlgoOid
                 ))
         );
