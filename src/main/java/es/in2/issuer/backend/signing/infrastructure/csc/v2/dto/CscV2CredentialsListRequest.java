@@ -8,6 +8,6 @@ public record CscV2CredentialsListRequest(
         @JsonProperty("certInfo")       boolean certInfo,
         @JsonProperty("authInfo")       boolean authInfo,
         @JsonProperty("onlyValid")      boolean onlyValid,
-        @JsonProperty("lang")           int lang,
+        @JsonProperty("lang")           String lang,
         @JsonProperty("clientData")     String clientData
 ) {}
