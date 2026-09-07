@@ -2,6 +2,7 @@ package es.in2.issuer.backend.shared.domain.service;
 
 import es.in2.issuer.backend.shared.domain.model.dto.CredentialCatalogEntryDto;
 import es.in2.issuer.backend.shared.domain.model.dto.credential.profile.CredentialProfile;
+import es.in2.issuer.backend.shared.domain.model.enums.DeliveryMode;
 import reactor.core.publisher.Mono;
 
 import java.util.List;
@@ -45,6 +46,14 @@ public interface TenantCredentialProfileService {
     Mono<List<CredentialCatalogEntryDto>> getCatalog();
 
     /**
+     * Returns the delivery modes explicitly configured for the current tenant on a given
+     * {@code credential_configuration_id}. Empty means "not configured" -- a sentinel
+     * that {@link es.in2.issuer.backend.shared.domain.service.DeliveryEligibilityResolver}
+     * treats as "default to the schema ceiling" (AD-8), never as "everything allowed".
+     */
+    Mono<Set<DeliveryMode>> findConfiguredDeliveryModes(String credentialConfigurationId);
+
+    /**
      * Replaces the set of enabled credential_configuration_ids for the current tenant.
      * Validates {@code enabledConfigurationIds ⊆ registry} (unknown ids ⇒ error, no write),
      * performs an atomic transactional delete+insert, and invalidates the tenant cache
@@ -52,8 +61,20 @@ public interface TenantCredentialProfileService {
      *
      * <p>An empty set wipes the tenant catalog, leaving nothing enabled. The admin API
      * rejects it upfront (see {@code UpdateCredentialCatalogRequest}); it stays available
-     * here as the reset primitive.
+     * here as the reset primitive -- delegates to the 2-arg overload with an empty map, so
+     * it preserves no stored delivery modes for any type it (re)enables.
      */
-    Mono<Void> updateCatalog(Set<String> enabledConfigurationIds);
+    default Mono<Void> updateCatalog(Set<String> enabledConfigurationIds) {
+        return updateCatalog(enabledConfigurationIds, Map.of());
+    }
+
+    /**
+     * Replaces the set of enabled credential_configuration_ids for the current tenant and,
+     * for each entry in {@code deliveryModesByConfigurationId}, its configured delivery
+     * modes (validated against the schema ceiling -- AC-04). A {@code ccid} enabled but
+     * absent from the map preserves its currently-stored delivery modes rather than
+     * clearing them (EC-01).
+     */
+    Mono<Void> updateCatalog(Set<String> enabledConfigurationIds, Map<String, Set<DeliveryMode>> deliveryModesByConfigurationId);
 
 }

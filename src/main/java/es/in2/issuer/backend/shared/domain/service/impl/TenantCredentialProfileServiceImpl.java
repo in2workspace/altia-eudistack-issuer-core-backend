@@ -7,6 +7,7 @@ import es.in2.issuer.backend.shared.domain.exception.UnknownCredentialConfigurat
 import es.in2.issuer.backend.shared.domain.model.dto.CredentialCatalogEntryDto;
 import es.in2.issuer.backend.shared.domain.model.dto.credential.profile.CredentialProfile;
 import es.in2.issuer.backend.shared.domain.model.entities.TenantCredentialProfile;
+import es.in2.issuer.backend.shared.domain.model.enums.DeliveryMode;
 import es.in2.issuer.backend.shared.domain.service.TenantCredentialProfileService;
 import es.in2.issuer.backend.shared.infrastructure.config.CredentialProfileRegistry;
 import es.in2.issuer.backend.shared.infrastructure.repository.TenantCredentialProfileRepository;
@@ -115,7 +116,15 @@ public class TenantCredentialProfileServiceImpl implements TenantCredentialProfi
     }
 
     @Override
-    public Mono<Void> updateCatalog(Set<String> enabledConfigurationIds) {
+    public Mono<Set<DeliveryMode>> findConfiguredDeliveryModes(String credentialConfigurationId) {
+        // TODO(EUD-169 task 7): wire to the per-tenant cache once it moves to
+        // Cache<String, Map<String, Set<DeliveryMode>>> (AD-8). Stub keeps the module
+        // compiling between task 5 (port) and task 7 (real cache-backed implementation).
+        return Mono.just(Set.of());
+    }
+
+    @Override
+    public Mono<Void> updateCatalog(Set<String> enabledConfigurationIds, Map<String, Set<DeliveryMode>> deliveryModesByConfigurationId) {
         Set<String> knownIds = registry.getAllProfiles().keySet();
         Set<String> unknown = enabledConfigurationIds.stream()
                 .filter(id -> !knownIds.contains(id))
