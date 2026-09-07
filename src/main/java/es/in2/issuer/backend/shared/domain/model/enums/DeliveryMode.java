@@ -1,6 +1,7 @@
 package es.in2.issuer.backend.shared.domain.model.enums;
 
 import java.util.Arrays;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -47,9 +48,7 @@ public enum DeliveryMode {
         Set<DeliveryMode> modes = Arrays.stream(delivery.split(","))
                 .map(String::trim)
                 .filter(s -> !s.isEmpty())
-                .map(s -> Arrays.stream(values())
-                        .filter(m -> m.value.equals(s))
-                        .findFirst()
+                .map(s -> fromValue(s)
                         .orElseThrow(() -> new IllegalArgumentException("Unknown delivery mode: " + s)))
                 .collect(Collectors.toSet());
 
@@ -58,6 +57,13 @@ public enum DeliveryMode {
         }
 
         return modes;
+    }
+
+    /** Resolves a raw wire value (e.g. {@code "ui"}) back to its {@link DeliveryMode}, if any matches. */
+    public static Optional<DeliveryMode> fromValue(String value) {
+        return Arrays.stream(values())
+                .filter(m -> m.value.equals(value))
+                .findFirst();
     }
 
     public static String toCanonicalCsv(Set<DeliveryMode> modes) {
