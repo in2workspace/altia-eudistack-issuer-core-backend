@@ -2,6 +2,8 @@ package es.in2.issuer.backend.oidc4vci.application.workflow.impl;
 
 import es.in2.issuer.backend.oidc4vci.application.workflow.CredentialOfferRefreshWorkflow;
 import es.in2.issuer.backend.oidc4vci.domain.service.CredentialOfferService;
+import es.in2.issuer.backend.shared.domain.exception.EmailCommunicationException;
+import es.in2.issuer.backend.shared.domain.model.dto.CredentialOfferResult;
 import es.in2.issuer.backend.shared.domain.model.entities.Issuance;
 import es.in2.issuer.backend.shared.domain.model.enums.CredentialStatusEnum;
 import es.in2.issuer.backend.shared.domain.model.enums.DeliveryMode;
@@ -42,6 +44,11 @@ public class CredentialOfferRefreshWorkflowImpl implements CredentialOfferRefres
                         credentialOfferRefreshToken,
                         publicIssuerBaseUrl,
                         publicWalletBaseUrl))
+                // This endpoint exists to re-send the email, so a reported email failure is a failure
+                // here -- unlike an issuance, which records it per mode and keeps the other modes.
+                .flatMap(result -> result.emailError() != null
+                        ? Mono.<CredentialOfferResult>error(new EmailCommunicationException(result.emailError()))
+                        : Mono.just(result))
                 .doOnSuccess(v -> log.info("Credential offer refreshed successfully"))
                 .then();
     }

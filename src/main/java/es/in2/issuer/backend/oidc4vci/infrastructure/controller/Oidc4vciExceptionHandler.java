@@ -8,6 +8,7 @@ import es.in2.issuer.backend.shared.domain.exception.ProofValidationException;
 import es.in2.issuer.backend.oidc4vci.domain.exception.UnknownCredentialIdentifierException;
 import es.in2.issuer.backend.oidc4vci.domain.exception.CredentialRequestDeniedException;
 import es.in2.issuer.backend.oidc4vci.domain.exception.InvalidNonceException;
+import es.in2.issuer.backend.issuance.domain.exception.InvalidHolderKeyException;
 import es.in2.issuer.backend.shared.domain.exception.UnknownCredentialConfigurationException;
 import es.in2.issuer.backend.shared.domain.util.GlobalErrorTypes;
 import es.in2.issuer.backend.shared.infrastructure.controller.error.ErrorResponseFactory;
@@ -110,6 +111,26 @@ public class Oidc4vciExceptionHandler {
     public Mono<CredentialErrorResponse> handleCredentialRequestDenied(CredentialRequestDeniedException ex) {
         log.warn("Credential request denied: {}", ex.getMessage());
         return Mono.just(new CredentialErrorResponse("credential_request_denied", ex.getMessage()));
+    }
+
+    // EUD-168 TD-14: HolderCnfJson.readValidated (called from Oid4VciCredentialWorkflowImpl.
+    // resolveCnf) re-validates a persisted holder_cnf before signing and throws this when the
+    // stored value is not a well-formed EC P-256 jwk. Before this handler existed, the exception
+    // fell through to the generic IssuanceExceptionHandler advice and reached the wallet as a
+    // GlobalErrorMessage (Problem-Details) with 400 and HolderKey's own write-side wording ("...
+    // expected a jwk member"), which describes a field this endpoint's request never has -- non-
+    // conformant with SS8.3.2's {error, error_description} shape and misleading about what went
+    // wrong. The wallet's request is well-formed; the defect is server-side stored data the wallet
+    // cannot fix by retrying, so this is credential_request_denied like the Issuance-state case
+    // above, not invalid_proof/invalid_request. Generic description on purpose (F4): the wallet's
+    // request never carries a holder_key at this endpoint, so echoing HolderKey's own message here
+    // would describe the wrong API's field to the wrong actor.
+    @ExceptionHandler(InvalidHolderKeyException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public Mono<CredentialErrorResponse> handleInvalidHolderKey(InvalidHolderKeyException ex) {
+        log.warn("Stored holder cnf failed re-validation: {}", ex.getMessage());
+        return Mono.just(new CredentialErrorResponse("credential_request_denied",
+                "The credential cannot be issued for this request"));
     }
 
     // Raised by ParServiceImpl, DpopValidationService, ClientAttestationValidationService and

@@ -8,6 +8,7 @@ import es.in2.issuer.backend.shared.domain.model.enums.DeliveryMode;
 import es.in2.issuer.backend.shared.domain.model.enums.UserRole;
 import es.in2.issuer.backend.shared.domain.service.AccessTokenService;
 import es.in2.issuer.backend.shared.domain.service.DeliveryEligibilityResolver;
+import es.in2.issuer.backend.shared.domain.service.SchemaDeliveryCeiling;
 import es.in2.issuer.backend.shared.domain.service.TenantCredentialProfileService;
 import es.in2.issuer.backend.shared.domain.service.TenantDeliveryConfigService;
 import es.in2.issuer.backend.shared.infrastructure.config.CredentialProfileRegistry;
@@ -52,6 +53,9 @@ class DeliveryConfigControllerTest {
     @Mock
     private DeliveryEligibilityResolver deliveryEligibilityResolver;
 
+    @Mock
+    private SchemaDeliveryCeiling schemaDeliveryCeiling;
+
     @InjectMocks
     private DeliveryConfigController controller;
 
@@ -76,13 +80,19 @@ class DeliveryConfigControllerTest {
         void get_tenantAdminAndAllowedProfile_returnsCanonicalSortedModes() {
             when(accessTokenService.getAuthorizationContext(AUTH_HEADER)).thenReturn(Mono.just(tenantAdmin()));
             mockKnownAllowedProfile();
-            when(deliveryEligibilityResolver.getEligibleModes(CONFIG_ID))
+            when(deliveryEligibilityResolver.resolveEligibleModes(CONFIG_ID))
                     .thenReturn(Mono.just(EnumSet.of(DeliveryMode.UI, DeliveryMode.DIRECT)));
+
+            when(schemaDeliveryCeiling.resolveEligibleModes(CONFIG_ID))
+                    .thenReturn(EnumSet.of(DeliveryMode.EMAIL, DeliveryMode.UI));
 
             StepVerifier.create(controller.getDeliveryConfig(AUTH_HEADER, CONFIG_ID))
                     .assertNext(dto -> {
                         assertEquals(CONFIG_ID, dto.credentialConfigurationId());
                         assertEquals(List.of("direct", "ui"), dto.eligibleModes());
+                        // AC-11: the ceiling travels with the read so a TenantAdmin can see why a mode is
+                        // unavailable instead of discovering it through a rejected write.
+                        assertEquals(List.of("email", "ui"), dto.schemaEligibleModes());
                     })
                     .verifyComplete();
         }

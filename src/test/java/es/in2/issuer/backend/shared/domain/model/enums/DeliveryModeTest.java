@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import java.util.EnumSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -78,6 +79,22 @@ class DeliveryModeTest {
         @Test
         void parse_onlySeparators_throwsIllegalArgumentException() {
             assertThrows(IllegalArgumentException.class, () -> DeliveryMode.parse(",,,"));
+        }
+    }
+
+    @Nested
+    class FromValue {
+
+        @Test
+        void fromValue_knownValue_returnsMatchingEnum() {
+            assertEquals(Optional.of(DeliveryMode.UI), DeliveryMode.fromValue("ui"));
+            assertEquals(Optional.of(DeliveryMode.EMAIL), DeliveryMode.fromValue("email"));
+            assertEquals(Optional.of(DeliveryMode.DIRECT), DeliveryMode.fromValue("direct"));
+        }
+
+        @Test
+        void fromValue_unknownValue_returnsEmpty() {
+            assertEquals(Optional.empty(), DeliveryMode.fromValue("carrier-pigeon"));
         }
     }
 

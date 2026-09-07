@@ -8,6 +8,7 @@ import es.in2.issuer.backend.shared.domain.exception.ProofValidationException;
 import es.in2.issuer.backend.oidc4vci.domain.exception.CredentialRequestDeniedException;
 import es.in2.issuer.backend.oidc4vci.domain.exception.InvalidNonceException;
 import es.in2.issuer.backend.oidc4vci.domain.exception.UnknownCredentialIdentifierException;
+import es.in2.issuer.backend.issuance.domain.exception.InvalidHolderKeyException;
 import es.in2.issuer.backend.shared.domain.exception.UnknownCredentialConfigurationException;
 import es.in2.issuer.backend.shared.infrastructure.controller.error.GlobalErrorMessage;
 import es.in2.issuer.backend.shared.domain.util.GlobalErrorTypes;
@@ -175,6 +176,23 @@ class Oidc4vciExceptionHandlerTest {
                 })
                 .verifyComplete();
 
+    }
+
+    // -------------------- handleInvalidHolderKey (EUD-168 TD-14) --------------------
+
+    @Test
+    void handleInvalidHolderKey_returnsCredentialRequestDeniedWithGenericDescription() {
+        var ex = new InvalidHolderKeyException("invalid holder_key: jwk must be a non-empty JSON object");
+
+        StepVerifier.create(handler.handleInvalidHolderKey(ex))
+                .assertNext(body -> {
+                    assertEquals("credential_request_denied", body.error());
+                    // F4: must NOT echo ex.getMessage() -- that wording describes holder_key, a
+                    // field this endpoint's own request never carries.
+                    assertEquals("The credential cannot be issued for this request", body.errorDescription());
+                    assertEquals(null, body.errorUri());
+                })
+                .verifyComplete();
     }
 
     // -------------------- handleIllegalArgumentException --------------------

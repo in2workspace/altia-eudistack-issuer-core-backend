@@ -36,6 +36,7 @@ class IssuanceMapperTest {
                 .credentialOfferRefreshToken("refresh-token")
                 .signedCredential("signed-jwt")
                 .deliveryAttemptedAt(deliveryAttemptedAt)
+                .holderCnf("{\"jwk\":{\"kty\":\"EC\"}}")
                 .version(3L)
                 .createdAt(createdAt)
                 .updatedAt(updatedAt)
@@ -59,6 +60,7 @@ class IssuanceMapperTest {
         assertThat(domain.getCredentialOfferRefreshToken()).isEqualTo("refresh-token");
         assertThat(domain.getSignedCredential()).isEqualTo("signed-jwt");
         assertThat(domain.getDeliveryAttemptedAt()).isEqualTo(deliveryAttemptedAt);
+        assertThat(domain.getHolderCnf()).isEqualTo("{\"jwk\":{\"kty\":\"EC\"}}");
         assertThat(domain.getVersion()).isEqualTo(3L);
         assertThat(domain.getCreatedAt()).isEqualTo(createdAt);
         assertThat(domain.getUpdatedAt()).isEqualTo(updatedAt);
@@ -90,6 +92,7 @@ class IssuanceMapperTest {
                 .credentialOfferRefreshToken("refresh-token")
                 .signedCredential("signed-jwt")
                 .deliveryAttemptedAt(deliveryAttemptedAt)
+                .holderCnf("{\"jwk\":{\"kty\":\"EC\"}}")
                 .version(7L)
                 .createdAt(createdAt)
                 .updatedAt(updatedAt)
@@ -113,6 +116,7 @@ class IssuanceMapperTest {
         assertThat(entity.getCredentialOfferRefreshToken()).isEqualTo("refresh-token");
         assertThat(entity.getSignedCredential()).isEqualTo("signed-jwt");
         assertThat(entity.getDeliveryAttemptedAt()).isEqualTo(deliveryAttemptedAt);
+        assertThat(entity.getHolderCnf()).isEqualTo("{\"jwk\":{\"kty\":\"EC\"}}");
         assertThat(entity.getVersion()).isEqualTo(7L);
         assertThat(entity.getCreatedAt()).isEqualTo(createdAt);
         assertThat(entity.getUpdatedAt()).isEqualTo(updatedAt);

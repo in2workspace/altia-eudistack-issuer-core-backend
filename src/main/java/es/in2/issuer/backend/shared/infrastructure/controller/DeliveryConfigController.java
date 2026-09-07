@@ -5,6 +5,7 @@ import es.in2.issuer.backend.shared.domain.exception.InvalidDeliveryConfigExcept
 import es.in2.issuer.backend.shared.domain.model.enums.DeliveryMode;
 import es.in2.issuer.backend.shared.domain.service.AccessTokenService;
 import es.in2.issuer.backend.shared.domain.service.DeliveryEligibilityResolver;
+import es.in2.issuer.backend.shared.domain.service.SchemaDeliveryCeiling;
 import es.in2.issuer.backend.shared.domain.service.TenantCredentialProfileService;
 import es.in2.issuer.backend.shared.domain.service.TenantDeliveryConfigService;
 import es.in2.issuer.backend.shared.infrastructure.config.CredentialProfileRegistry;
@@ -36,6 +37,7 @@ public class DeliveryConfigController {
     private final CredentialProfileRegistry credentialProfileRegistry;
     private final TenantDeliveryConfigService tenantDeliveryConfigService;
     private final DeliveryEligibilityResolver deliveryEligibilityResolver;
+    private final SchemaDeliveryCeiling schemaDeliveryCeiling;
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     @ResponseStatus(HttpStatus.OK)
@@ -43,7 +45,7 @@ public class DeliveryConfigController {
             @RequestHeader(HttpHeaders.AUTHORIZATION) String authorizationHeader,
             @PathVariable("credentialConfigurationId") String credentialConfigurationId) {
         return authorizeAndCheckProfile(authorizationHeader, credentialConfigurationId)
-                .then(Mono.defer(() -> deliveryEligibilityResolver.getEligibleModes(credentialConfigurationId)))
+                .then(Mono.defer(() -> deliveryEligibilityResolver.resolveEligibleModes(credentialConfigurationId)))
                 .map(modes -> toDto(credentialConfigurationId, modes));
     }
 
@@ -115,9 +117,14 @@ public class DeliveryConfigController {
                 .map(m -> m.value)
                 .sorted()
                 .toList();
+        List<String> ceiling = schemaDeliveryCeiling.resolveEligibleModes(credentialConfigurationId).stream()
+                .map(m -> m.value)
+                .sorted()
+                .toList();
         return DeliveryConfigDto.builder()
                 .credentialConfigurationId(credentialConfigurationId)
                 .eligibleModes(canonical)
+                .schemaEligibleModes(ceiling)
                 .build();
     }
 
