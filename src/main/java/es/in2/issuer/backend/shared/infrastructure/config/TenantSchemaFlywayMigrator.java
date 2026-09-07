@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.Statement;
 import java.util.ArrayList;
@@ -72,18 +73,15 @@ public class TenantSchemaFlywayMigrator implements ApplicationRunner {
 
     private void migrateTenantSchema(String jdbcUrl, String username, String password, String schema) {
         log.info("Migrating tenant schema: {}", schema);
-        try (Connection conn = DriverManager.getConnection(jdbcUrl, username, password);
-             Statement stmt = conn.createStatement()) {
-            stmt.execute("CREATE SCHEMA IF NOT EXISTS \"" + sanitizeSchemaName(schema) + "\"");
-        } catch (Exception e) {
-            throw new IllegalStateException("Failed to create schema: " + schema, e);
-        }
+
+        sanitizeSchemaName(schema);
 
         Flyway.configure()
                 .dataSource(jdbcUrl, username, password)
                 .locations("classpath:db/tenant")
                 .defaultSchema(schema)
                 .schemas(schema)
+                .createSchemas(true)
                 .table("flyway_schema_history")
                 .baselineOnMigrate(true)
                 .load()
@@ -91,7 +89,7 @@ public class TenantSchemaFlywayMigrator implements ApplicationRunner {
     }
 
     private String sanitizeSchemaName(String schema) {
-        if (!schema.matches("^[a-zA-Z0-9_-]+$")) {
+        if (schema == null || !schema.matches("^[a-z][a-z0-9_-]{0,62}$")) {
             throw new IllegalArgumentException("Invalid schema name: " + schema);
         }
         return schema;

@@ -14,13 +14,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 class CorsOriginsLoaderTest {
 
     @Test
-    void loadOrigins_ClasspathFileEmpty_ReturnsEmptyList() {
-        // The classpath cors-origins.yaml has origins: [] (empty by default)
+    void loadOrigins_ClasspathFile_ReturnsDefaultOrigins() {
+        // The classpath cors-origins.yaml now has default origins
         CorsOriginsLoader loader = new CorsOriginsLoader(new CorsProperties(null));
 
         List<String> origins = loader.loadOrigins();
 
-        assertThat(origins).isEmpty();
+        assertThat(origins).containsExactly(
+                "http://localhost:4200",
+                "https://sandbox.127.0.0.1.nip.io:4443",
+                "https://kpmg.127.0.0.1.nip.io:4443"
+        );
     }
 
     @Test
@@ -70,8 +74,12 @@ class CorsOriginsLoaderTest {
 
         List<String> origins = loader.loadOrigins();
 
-        // Falls back to classpath cors-origins.yaml which has origins: []
-        assertThat(origins).isEmpty();
+        // Falls back to classpath cors-origins.yaml which has default origins
+        assertThat(origins).containsExactly(
+                "http://localhost:4200",
+                "https://sandbox.127.0.0.1.nip.io:4443",
+                "https://kpmg.127.0.0.1.nip.io:4443"
+        );
     }
 
     @Test
@@ -92,7 +100,11 @@ class CorsOriginsLoaderTest {
 
         List<String> origins = loader.loadOrigins();
 
-        // Classpath default has origins: []
-        assertThat(origins).isEmpty();
+        // Classpath default has default origins
+        assertThat(origins).containsExactly(
+                "http://localhost:4200",
+                "https://sandbox.127.0.0.1.nip.io:4443",
+                "https://kpmg.127.0.0.1.nip.io:4443"
+        );
     }
 }

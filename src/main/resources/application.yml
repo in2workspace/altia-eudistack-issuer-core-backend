@@ -192,6 +192,8 @@ app:
     path: ${APP_TENANTS_CUSTOM_DOMAINS_PATH:classpath:tenants-custom-domains.yaml}
   cors:
     origins-path: ${APP_CORS_ORIGINS_PATH:}
+  security:
+    dummy-secret-hash: ${APP_SECURITY_DUMMY_SECRET_HASH:}
   # mail-from removed — now per-tenant via tenant_config.issuer.mail_from
   default-lang: ${APP_DEFAULT_LANG:en}
   sys-tenant: ${APP_SYS_TENANT:SYSTEM}

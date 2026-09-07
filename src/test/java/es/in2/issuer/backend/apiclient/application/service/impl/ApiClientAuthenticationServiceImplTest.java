@@ -31,6 +31,7 @@ class ApiClientAuthenticationServiceImplTest {
     private static final String TENANT = "acme";
     private static final String CLIENT_ID = "acme-hr";
     private static final String RAW_SECRET = "s3cr3t-value";
+    private static final String DUMMY_HASH = "$2a$10$rCk2.19r3MaYAe4KZkmvIOXv6FBRCMvaKH9FG7txMfvek27a45y26";
 
     @Mock
     private ApiClientRepository apiClientRepository;
@@ -43,7 +44,7 @@ class ApiClientAuthenticationServiceImplTest {
     private ApiClientAuthenticationServiceImpl service;
 
     private void init() {
-        service = new ApiClientAuthenticationServiceImpl(apiClientRepository, passwordEncoder, auditService);
+        service = new ApiClientAuthenticationServiceImpl(apiClientRepository, passwordEncoder, auditService, DUMMY_HASH);
     }
 
     private ApiClient clientWith(AuthorizationStatus status, boolean canTriggerIssuance) {

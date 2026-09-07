@@ -42,7 +42,7 @@ class SecurityConfigTest {
     @Mock
     private ProblemAccessDeniedHandler deniedHandler;
     @Mock
-    private CorsConfig corsConfig;
+    private CorsFilterConfig corsConfig;
     @Mock
     private AuditService auditService;
 
