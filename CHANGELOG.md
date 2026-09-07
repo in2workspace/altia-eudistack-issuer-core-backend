@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.9.0] - 2026-09-07
+
 ### Changed
 
 - **Tech Debt — Atomic reactive writes for status list creation (`BitstringStatusListProvider`, H-02 / H-07)**: refactored `BitstringStatusListProvider.createNewList` to execute `save` (TX1) and `updateSignedCredential` (TX2) in short reactive transactions via `TransactionalOperator`, keeping the external HTTP/QTSP signing call outside of any transactional boundary, with a transactionally wrapped compensation delete on failure. Conforms to the module transactional policy (`persistence-layer-rules.md`, `reactive-code-analysis.md`).
