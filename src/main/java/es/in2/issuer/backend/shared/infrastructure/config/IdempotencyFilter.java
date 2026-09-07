@@ -2,12 +2,14 @@ package es.in2.issuer.backend.shared.infrastructure.config;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import es.in2.issuer.backend.shared.domain.service.AccessTokenService;
 import lombok.extern.slf4j.Slf4j;
 import org.reactivestreams.Publisher;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.annotation.Order;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.core.io.buffer.DataBufferUtils;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.http.server.reactive.ServerHttpResponseDecorator;
@@ -31,12 +33,15 @@ public class IdempotencyFilter implements WebFilter {
     private static final String IDEMPOTENCY_HEADER = "X-Idempotency-Key";
 
     private final IssuanceMetrics issuanceMetrics;
+    private final AccessTokenService accessTokenService;
     private final Cache<String, CachedResponse> cache;
 
     public IdempotencyFilter(
             @Value("${issuer.api.idempotency-ttl-seconds:3600}") long ttlSeconds,
-            IssuanceMetrics issuanceMetrics) {
+            IssuanceMetrics issuanceMetrics,
+            AccessTokenService accessTokenService) {
         this.issuanceMetrics = issuanceMetrics;
+        this.accessTokenService = accessTokenService;
         this.cache = Caffeine.newBuilder()
                 .expireAfterWrite(Duration.ofSeconds(ttlSeconds))
                 .maximumSize(10_000)
@@ -55,11 +60,39 @@ public class IdempotencyFilter implements WebFilter {
             return chain.filter(exchange);
         }
 
-        String tenantScope = exchange.getRequest().getHeaders().getFirst(X_TENANT_HEADER);
-        if (tenantScope == null || tenantScope.isBlank()) {
-            tenantScope = exchange.getRequest().getURI().getHost();
+        String tenantHeader = exchange.getRequest().getHeaders().getFirst(X_TENANT_HEADER);
+        String tenantScope = (tenantHeader == null || tenantHeader.isBlank())
+                ? exchange.getRequest().getURI().getHost()
+                : tenantHeader;
+
+        // The cache key MUST bind to the caller's own identity (security finding H2): scoping by
+        // tenant alone lets any organization within the same tenant collide on a shared or
+        // predictable idempotency key and receive another organization's cached response --
+        // including a directly-delivered signed credential (EUD-167), which exists nowhere else
+        // (it is never persisted, only cached here). The organization id is read straight from the
+        // bearer token rather than from a security context populated upstream, so this does not
+        // depend on this filter's position relative to the authentication filter chain. A request
+        // whose token cannot be resolved skips idempotency caching entirely instead of risking a
+        // wrong key -- it is rejected downstream on its own merits regardless.
+        String authorizationHeader = exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
+        if (authorizationHeader == null || authorizationHeader.isBlank()) {
+            return chain.filter(exchange);
         }
-        String scopedIdempotencyKey = tenantScope + ":" + idempotencyKey;
+
+        String finalTenantScope = tenantScope;
+        return accessTokenService.getOrganizationId(authorizationHeader)
+                .flatMap(organizationId -> handleIdempotentRequest(
+                        exchange, chain, finalTenantScope, organizationId, idempotencyKey))
+                .onErrorResume(ex -> {
+                    log.warn("Could not resolve caller organization for idempotency scoping, skipping cache: {}",
+                            ex.toString());
+                    return chain.filter(exchange);
+                });
+    }
+
+    private Mono<Void> handleIdempotentRequest(ServerWebExchange exchange, WebFilterChain chain,
+                                                String tenantScope, String organizationId, String idempotencyKey) {
+        String scopedIdempotencyKey = tenantScope + ":" + organizationId + ":" + idempotencyKey;
 
         CachedResponse cached = cache.getIfPresent(scopedIdempotencyKey);
         if (cached != null) {

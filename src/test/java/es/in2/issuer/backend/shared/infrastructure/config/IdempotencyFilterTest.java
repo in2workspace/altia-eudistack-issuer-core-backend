@@ -1,5 +1,7 @@
 package es.in2.issuer.backend.shared.infrastructure.config;
 
+import es.in2.issuer.backend.shared.domain.exception.InvalidTokenException;
+import es.in2.issuer.backend.shared.domain.service.AccessTokenService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -7,6 +9,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.core.io.buffer.DefaultDataBufferFactory;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
@@ -20,6 +23,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static es.in2.issuer.backend.shared.domain.util.EndpointsConstants.ISSUANCES_PATH;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
@@ -28,15 +34,22 @@ class IdempotencyFilterTest {
     private static final String IDEMPOTENCY_HEADER = "X-Idempotency-Key";
     private static final String TENANT_HEADER = "X-Tenant";
     private static final String BODY = "{\"signed_credential\":\"signed-jwt\"}";
+    private static final String TOKEN_ORG_A = "Bearer token-org-a";
+    private static final String TOKEN_ORG_B = "Bearer token-org-b";
 
     @Mock
     private IssuanceMetrics issuanceMetrics;
+
+    @Mock
+    private AccessTokenService accessTokenService;
 
     private IdempotencyFilter filter;
 
     @BeforeEach
     void setUp() {
-        filter = new IdempotencyFilter(3600, issuanceMetrics);
+        filter = new IdempotencyFilter(3600, issuanceMetrics, accessTokenService);
+        lenient().when(accessTokenService.getOrganizationId(eq(TOKEN_ORG_A))).thenReturn(Mono.just("org-a"));
+        lenient().when(accessTokenService.getOrganizationId(eq(TOKEN_ORG_B))).thenReturn(Mono.just("org-b"));
     }
 
     /** Chain that writes a fixed JSON body once and counts how many times it runs. */
@@ -61,12 +74,18 @@ class IdempotencyFilterTest {
         WebFilterChain chain = writingChain(invocations);
 
         MockServerWebExchange first = MockServerWebExchange.from(
-                MockServerHttpRequest.post(ISSUANCES_PATH).header(IDEMPOTENCY_HEADER, key).build());
+                MockServerHttpRequest.post(ISSUANCES_PATH)
+                        .header(IDEMPOTENCY_HEADER, key)
+                        .header(HttpHeaders.AUTHORIZATION, TOKEN_ORG_A)
+                        .build());
         StepVerifier.create(filter.filter(first, chain)).verifyComplete();
         assertEquals(BODY, readBody(first));
 
         MockServerWebExchange second = MockServerWebExchange.from(
-                MockServerHttpRequest.post(ISSUANCES_PATH).header(IDEMPOTENCY_HEADER, key).build());
+                MockServerHttpRequest.post(ISSUANCES_PATH)
+                        .header(IDEMPOTENCY_HEADER, key)
+                        .header(HttpHeaders.AUTHORIZATION, TOKEN_ORG_A)
+                        .build());
         StepVerifier.create(filter.filter(second, chain)).verifyComplete();
 
         assertEquals(BODY, readBody(second));
@@ -86,6 +105,7 @@ class IdempotencyFilterTest {
                 MockServerHttpRequest.post(ISSUANCES_PATH)
                         .header(IDEMPOTENCY_HEADER, sharedKey)
                         .header("X-Tenant", "tenant-a")
+                        .header(HttpHeaders.AUTHORIZATION, TOKEN_ORG_A)
                         .build());
         StepVerifier.create(filter.filter(tenantA, chain)).verifyComplete();
 
@@ -93,12 +113,86 @@ class IdempotencyFilterTest {
                 MockServerHttpRequest.post(ISSUANCES_PATH)
                         .header(IDEMPOTENCY_HEADER, sharedKey)
                         .header("X-Tenant", "tenant-b")
+                        .header(HttpHeaders.AUTHORIZATION, TOKEN_ORG_A)
                         .build());
         StepVerifier.create(filter.filter(tenantB, chain)).verifyComplete();
 
-        // Different tenants reusing the same idempotency key must NOT share the cache entry.
+        // Different tenants reusing the same idempotency key (same organization) must NOT share the cache entry.
         assertEquals(2, invocations.get());
         assertEquals(BODY, readBody(tenantB));
+    }
+
+    @Test
+    void sameKeyDifferentOrganizationsSameTenant_doesNotCollide() {
+        // Regression test for H2: same tenant, same idempotency key, but two different
+        // organizations -- reusing a key across organizations of the same tenant must not
+        // return one organization's cached response (e.g. a signed credential) to the other.
+        String sharedKey = "shared-idem-key";
+        AtomicInteger invocations = new AtomicInteger();
+        WebFilterChain chain = writingChain(invocations);
+
+        MockServerWebExchange orgA = MockServerWebExchange.from(
+                MockServerHttpRequest.post(ISSUANCES_PATH)
+                        .header(IDEMPOTENCY_HEADER, sharedKey)
+                        .header(TENANT_HEADER, "tenant-a")
+                        .header(HttpHeaders.AUTHORIZATION, TOKEN_ORG_A)
+                        .build());
+        StepVerifier.create(filter.filter(orgA, chain)).verifyComplete();
+
+        MockServerWebExchange orgB = MockServerWebExchange.from(
+                MockServerHttpRequest.post(ISSUANCES_PATH)
+                        .header(IDEMPOTENCY_HEADER, sharedKey)
+                        .header(TENANT_HEADER, "tenant-a")
+                        .header(HttpHeaders.AUTHORIZATION, TOKEN_ORG_B)
+                        .build());
+        StepVerifier.create(filter.filter(orgB, chain)).verifyComplete();
+
+        assertEquals(2, invocations.get());
+        assertEquals(BODY, readBody(orgB));
+        verify(issuanceMetrics, never()).recordIdempotencyCacheHit();
+    }
+
+    @Test
+    void missingAuthorizationHeader_bypassesCacheGracefully() {
+        AtomicInteger invocations = new AtomicInteger();
+        WebFilterChain chain = writingChain(invocations);
+
+        MockServerWebExchange first = MockServerWebExchange.from(
+                MockServerHttpRequest.post(ISSUANCES_PATH).header(IDEMPOTENCY_HEADER, "no-auth-key").build());
+        StepVerifier.create(filter.filter(first, chain)).verifyComplete();
+
+        MockServerWebExchange second = MockServerWebExchange.from(
+                MockServerHttpRequest.post(ISSUANCES_PATH).header(IDEMPOTENCY_HEADER, "no-auth-key").build());
+        StepVerifier.create(filter.filter(second, chain)).verifyComplete();
+
+        // No organization to scope the key by -- never cached, so downstream runs every time.
+        assertEquals(2, invocations.get());
+    }
+
+    @Test
+    void unresolvableToken_bypassesCacheGracefully() {
+        String key = "unresolvable-token-key";
+        lenient().when(accessTokenService.getOrganizationId(eq("Bearer garbage")))
+                .thenReturn(Mono.error(new InvalidTokenException()));
+        AtomicInteger invocations = new AtomicInteger();
+        WebFilterChain chain = writingChain(invocations);
+
+        MockServerWebExchange first = MockServerWebExchange.from(
+                MockServerHttpRequest.post(ISSUANCES_PATH)
+                        .header(IDEMPOTENCY_HEADER, key)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer garbage")
+                        .build());
+        StepVerifier.create(filter.filter(first, chain)).verifyComplete();
+
+        MockServerWebExchange second = MockServerWebExchange.from(
+                MockServerHttpRequest.post(ISSUANCES_PATH)
+                        .header(IDEMPOTENCY_HEADER, key)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer garbage")
+                        .build());
+        StepVerifier.create(filter.filter(second, chain)).verifyComplete();
+
+        // A token that cannot be resolved must not crash the request nor be cached under a wrong key.
+        assertEquals(2, invocations.get());
     }
 
     @Test
