@@ -130,7 +130,7 @@ class CredentialCatalogTransactionalIT extends PostgresIntegrationBase {
         Mono<Void> failingTx = transactionalOperator.transactional(
                 repository.deleteAll()
                         .then(r2dbcEntityTemplate.insert(
-                                new TenantCredentialProfile(null, configId, true, now, now)).then())
+                                new TenantCredentialProfile(null, configId, true, now, now, null)).then())
                         .then(Mono.<Void>error(new RuntimeException("boom")))
         ).contextWrite(ctx(TENANT_A));
 

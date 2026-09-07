@@ -127,7 +127,7 @@ public class TenantCredentialProfileServiceImpl implements TenantCredentialProfi
             String tenant = requireTenant(ctx);
             Instant now = Instant.now();
             List<TenantCredentialProfile> rows = enabledConfigurationIds.stream()
-                    .map(id -> new TenantCredentialProfile(null, id, true, now, now))
+                    .map(id -> new TenantCredentialProfile(null, id, true, now, now, null))
                     .toList();
 
             Mono<Void> write = repository.deleteAll()

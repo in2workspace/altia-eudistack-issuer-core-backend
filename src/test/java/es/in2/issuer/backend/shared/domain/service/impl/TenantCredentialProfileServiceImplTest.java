@@ -273,7 +273,7 @@ class TenantCredentialProfileServiceImplTest {
     }
 
     private static TenantCredentialProfile row(String configId) {
-        return new TenantCredentialProfile(UUID.randomUUID(), configId, true, Instant.now(), Instant.now());
+        return new TenantCredentialProfile(UUID.randomUUID(), configId, true, Instant.now(), Instant.now(), null);
     }
 
     private static CredentialProfile profile(String id, String displayName) {
