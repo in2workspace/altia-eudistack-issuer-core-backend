@@ -166,11 +166,17 @@ public class IssuanceWorkflowImpl implements IssuanceWorkflow {
             String publicWalletBaseUrl) {
 
         String delivery = request.delivery() != null ? request.delivery() : DEFAULT_DELIVERY;
-        String safeDelivery = keepOnlyOid4vciDeliveryModes(delivery);
 
-        return validateRequest(request, null)
-                .then(Mono.defer(() -> payloadSchemaValidator.validate(request.credentialConfigurationId(), request.payload())))
-                .then(Mono.defer(() -> performIssuanceFlow(processId, request, token, publicIssuerBaseUrl, publicWalletBaseUrl, safeDelivery)));
+        // TD-05: keepOnlyOid4vciDeliveryModes can throw synchronously (InvalidDeliveryModeException).
+        // Called as a plain statement here (as it was before), that throw would escape this method
+        // before any Mono even exists -- safe today only because the sole caller (BootstrapController)
+        // happens to invoke this inside Mono.deferContextual, which is Reactor's business, not this
+        // method's contract. Mono.fromCallable defers the call to subscription time so the exception
+        // always surfaces as a normal error signal, regardless of how a caller invokes this method.
+        return Mono.fromCallable(() -> keepOnlyOid4vciDeliveryModes(delivery))
+                .flatMap(safeDelivery -> validateRequest(request, null)
+                        .then(Mono.defer(() -> payloadSchemaValidator.validate(request.credentialConfigurationId(), request.payload())))
+                        .then(Mono.defer(() -> performIssuanceFlow(processId, request, token, publicIssuerBaseUrl, publicWalletBaseUrl, safeDelivery))));
     }
 
     private Mono<Void> validateRequest(IssuanceRequest request, String idToken) {
@@ -633,14 +639,31 @@ public class IssuanceWorkflowImpl implements IssuanceWorkflow {
                 .collect(Collectors.joining(","));
     }
 
+    /**
+     * TD-05: {@code DeliveryMode.parse}'s {@code IllegalArgumentException} has no
+     * {@code @ExceptionHandler} registered anywhere -- left uncaught, it falls through to a generic
+     * 500 instead of the 400 {@code invalid_request} ES-01 requires. Caught and re-thrown as
+     * {@link InvalidDeliveryModeException} here, exactly as {@link #resolveAndValidateDeliveryModes}
+     * already does for the authenticated path -- both are evaluated inside a reactive operator
+     * ({@code Mono.deferContextual} at the bootstrap controller, {@code Mono.defer} here), so a
+     * synchronous throw is captured as an error signal and reaches {@code IssuanceExceptionHandler}
+     * like any other.
+     */
     private String keepOnlyOid4vciDeliveryModes(String delivery) {
-        String oid4vciDelivery = DeliveryMode.parse(delivery).stream()
+        final Set<DeliveryMode> modes;
+        try {
+            modes = DeliveryMode.parse(delivery);
+        } catch (IllegalArgumentException ex) {
+            throw new InvalidDeliveryModeException(ex.getMessage());
+        }
+
+        String oid4vciDelivery = modes.stream()
                 .filter(m -> m.isOid4vci)
                 .map(m -> m.value)
                 .collect(Collectors.joining(","));
 
         if (oid4vciDelivery.isBlank()) {
-            throw new IllegalArgumentException(
+            throw new InvalidDeliveryModeException(
                     "Bootstrap issuance requires at least one OID4VCI delivery mode."
             );
         }

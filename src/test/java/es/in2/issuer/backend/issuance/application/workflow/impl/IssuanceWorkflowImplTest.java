@@ -1193,6 +1193,39 @@ class IssuanceWorkflowImplTest {
         verifyNoInteractions(issuancePdpService);
     }
 
+    // TD-05: DeliveryMode.parse's IllegalArgumentException had no @ExceptionHandler registered,
+    // falling through to a generic 500 instead of the 400 ES-01 requires. Both bootstrap cases below
+    // now surface as InvalidDeliveryModeException, mapped to 400 by IssuanceExceptionHandler.
+
+    @Test
+    void issueCredentialWithoutAuthorizationShouldRejectNonOid4vciDeliveryMode() {
+        JsonNode payload = new ObjectMapper().createObjectNode();
+        // "direct" is a valid DeliveryMode, but bootstrap issuance has no HTTP response leg to
+        // deliver a direct credential through -- it requires at least one OID4VCI mode.
+        IssuanceRequest request = new IssuanceRequest(CONFIG_ID, payload, "direct", EMAIL, null);
+
+        StepVerifier.create(workflow.issueCredentialWithoutAuthorization("p", request, "bootstrap-token", BASE_URL, WALLET_URL))
+                .expectErrorSatisfies(ex -> {
+                    assertInstanceOf(InvalidDeliveryModeException.class, ex);
+                    assertTrue(ex.getMessage().contains("OID4VCI delivery mode"));
+                })
+                .verify();
+
+        verifyNoInteractions(credentialProfileRegistry, payloadSchemaValidator, issuancePdpService);
+    }
+
+    @Test
+    void issueCredentialWithoutAuthorizationShouldRejectUnknownDeliveryMode() {
+        JsonNode payload = new ObjectMapper().createObjectNode();
+        IssuanceRequest request = new IssuanceRequest(CONFIG_ID, payload, "not-a-real-mode", EMAIL, null);
+
+        StepVerifier.create(workflow.issueCredentialWithoutAuthorization("p", request, "bootstrap-token", BASE_URL, WALLET_URL))
+                .expectErrorSatisfies(ex -> assertInstanceOf(InvalidDeliveryModeException.class, ex))
+                .verify();
+
+        verifyNoInteractions(credentialProfileRegistry, payloadSchemaValidator, issuancePdpService);
+    }
+
     @Test
     void issueCredentialShouldPassValidationWhenProfileRequiresIdTokenAndTokenIsProvided() {
         UUID issuanceId = UUID.randomUUID();
