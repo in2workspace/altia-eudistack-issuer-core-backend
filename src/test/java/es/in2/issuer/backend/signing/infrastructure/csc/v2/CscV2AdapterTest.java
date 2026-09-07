@@ -254,6 +254,52 @@ class CscV2AdapterTest {
                 .verifyComplete();
     }
 
+    // A QTSP's credentials/list returning a raw 500 (e.g. Digitel rejecting a
+    // spec-conformant request body) must not propagate as-is: it has to
+    // surface as a RemoteSignatureException, which SharedExceptionHandler
+    // maps to 502 Bad Gateway — see SharedExceptionHandlerTest#handleRemoteSignatureException.
+    @Test
+    void validateCredentialId_qtspInternalServerError_mapsToRemoteSignatureException() {
+        WebClientResponseException internalServerError = WebClientResponseException.create(
+                HttpStatus.INTERNAL_SERVER_ERROR.value(), "Internal Server Error", null,
+                new byte[0], StandardCharsets.UTF_8
+        );
+
+        when(httpUtils.postRequest(
+                eq("https://qtsp.test" + CscV2Paths.LIST),
+                anyList(),
+                anyString()
+        )).thenReturn(Mono.error(internalServerError));
+
+        StepVerifier.create(adapter.validateCredentialId(cfg, "access-token", "cred-123"))
+                .expectErrorSatisfies(ex -> {
+                    assertTrue(ex instanceof RemoteSignatureException);
+                    assertTrue(ex.getMessage().contains("Failed to list credentials from url"));
+                })
+                .verify();
+    }
+
+    @Test
+    void listCredentialIds_qtspInternalServerError_mapsToRemoteSignatureException() {
+        WebClientResponseException internalServerError = WebClientResponseException.create(
+                HttpStatus.INTERNAL_SERVER_ERROR.value(), "Internal Server Error", null,
+                new byte[0], StandardCharsets.UTF_8
+        );
+
+        when(httpUtils.postRequest(
+                eq("https://qtsp.test" + CscV2Paths.LIST),
+                anyList(),
+                anyString()
+        )).thenReturn(Mono.error(internalServerError));
+
+        StepVerifier.create(adapter.listCredentialIds(cfg, "access-token"))
+                .expectErrorSatisfies(ex -> {
+                    assertTrue(ex instanceof RemoteSignatureException);
+                    assertTrue(ex.getMessage().contains("Failed to list credentials"));
+                })
+                .verify();
+    }
+
     @Test
     void requestAccessToken_delegatesToAuthStrategy() {
         CscAuthStrategy mockStrategy = mock(CscAuthStrategy.class);
