@@ -1,6 +1,15 @@
 package es.in2.issuer.backend.signing.domain.service.impl;
 
+import com.nimbusds.jose.JOSEException;
+import com.nimbusds.jose.JWSAlgorithm;
+import com.nimbusds.jose.JWSHeader;
+import com.nimbusds.jose.JWSVerifier;
+import com.nimbusds.jose.crypto.ECDSAVerifier;
+import com.nimbusds.jose.crypto.RSASSAVerifier;
+import com.nimbusds.jose.util.X509CertUtils;
+import com.nimbusds.jwt.SignedJWT;
 import es.in2.issuer.backend.signing.domain.exception.SignatureProcessingException;
+import es.in2.issuer.backend.signing.domain.model.dto.CertificateInfo;
 import es.in2.issuer.backend.signing.infrastructure.csc.config.RemoteSignatureDto;
 import es.in2.issuer.backend.signing.domain.model.dto.SigningRequest;
 import es.in2.issuer.backend.signing.domain.model.dto.SigningResult;
@@ -15,8 +24,14 @@ import reactor.core.publisher.Mono;
 import reactor.util.retry.Retry;
 
 import java.nio.charset.StandardCharsets;
+import java.security.cert.X509Certificate;
+import java.security.interfaces.ECPublicKey;
+import java.security.interfaces.RSAPublicKey;
+import java.text.ParseException;
 import java.time.Duration;
 import java.util.Base64;
+import java.util.List;
+import java.util.Set;
 
 import static es.in2.issuer.backend.shared.domain.util.Constants.SIGNATURE_REMOTE_SCOPE_CREDENTIAL;
 
@@ -24,6 +39,15 @@ import static es.in2.issuer.backend.shared.domain.util.Constants.SIGNATURE_REMOT
 @Service
 @RequiredArgsConstructor
 public class SignDocServiceImpl implements SignDocService {
+
+    // Mirrors JadesHeaderBuilderServiceImpl.mapOidToJwtAlg's output set -- anything else (including
+    // "none" or an HMAC alg) is rejected regardless of whether some verifier would happen to accept
+    // it, closing the classic algorithm-confusion class of attack.
+    private static final Set<JWSAlgorithm> ALLOWED_ALGORITHMS = Set.of(
+            JWSAlgorithm.ES256, JWSAlgorithm.ES384, JWSAlgorithm.ES512,
+            JWSAlgorithm.RS256, JWSAlgorithm.RS384, JWSAlgorithm.RS512,
+            JWSAlgorithm.PS256
+    );
 
     private final CscPort cscPort;
     private final JwtUtils jwtUtils;
@@ -66,20 +90,84 @@ public class SignDocServiceImpl implements SignDocService {
                         .flatMap(certInfo -> {
                             String signAlgoOid = certInfo.keyAlgorithms().getFirst();
                             return cscPort.authorizeForDoc(cfg, accessToken)
-                                    .flatMap(sad -> cscPort.signDoc(cfg, accessToken, sad, docB64, signAlgoOid));
+                                    .flatMap(sad -> cscPort.signDoc(cfg, accessToken, sad, docB64, signAlgoOid))
+                                    .flatMap(signedDocB64 -> verifyAndBuild(request, certInfo, signedDocB64));
                         })
-                )
-                .flatMap(signedDocB64 -> verifyAndBuild(request, signedDocB64));
+                );
     }
 
-    private Mono<SigningResult> verifyAndBuild(SigningRequest request, String signedDocB64) {
+    /**
+     * H1: the CSC {@code signDoc} operation builds the JWS header itself -- unlike the sibling
+     * {@code signHash} path, this service never constructs {@code alg}/{@code x5c} locally, so it
+     * cannot assume either is trustworthy just because a response came back. Beyond the pre-existing
+     * payload-equality check, this now verifies the signature/alg/certificate chain the finding named:
+     * the algorithm is restricted to a closed allowlist, the leaf certificate in {@code x5c} must be
+     * the exact certificate {@code getCredentialInfo} already returned for this {@code credentialId}
+     * (the QTSP signed with the credential we actually asked for, not a substituted one), and the
+     * signature is verified cryptographically against that certificate's public key. Full chain-of-trust
+     * validation to a root CA and revocation checking (OCSP/CRL) are deliberately out of scope -- no
+     * trust-anchor infrastructure exists in this codebase yet; see EUD-167/tech-debt.md.
+     */
+    private Mono<SigningResult> verifyAndBuild(SigningRequest request, CertificateInfo certInfo, String signedDocB64) {
         return Mono.fromCallable(() -> {
             String signedDoc = new String(Base64.getDecoder().decode(signedDocB64), StandardCharsets.UTF_8);
             String receivedPayload = jwtUtils.decodePayload(signedDoc);
             if (!jwtUtils.areJsonsEqual(receivedPayload, request.data())) {
                 throw new SignatureProcessingException("Signed payload received does not match the original data");
             }
+            verifySignature(signedDoc, certInfo);
             return new SigningResult(request.type(), signedDoc);
         });
+    }
+
+    private void verifySignature(String signedDoc, CertificateInfo certInfo) {
+        SignedJWT signedJWT;
+        try {
+            signedJWT = SignedJWT.parse(signedDoc);
+        } catch (ParseException e) {
+            throw new SignatureProcessingException("Signed document is not a well-formed JWS");
+        }
+
+        JWSHeader header = signedJWT.getHeader();
+        if (!ALLOWED_ALGORITHMS.contains(header.getAlgorithm())) {
+            throw new SignatureProcessingException("Signed document uses a disallowed algorithm");
+        }
+
+        List<com.nimbusds.jose.util.Base64> x5c = header.getX509CertChain();
+        if (x5c == null || x5c.isEmpty()) {
+            throw new SignatureProcessingException("Signed document is missing its certificate chain (x5c)");
+        }
+
+        X509Certificate leaf = X509CertUtils.parse(x5c.getFirst().decode());
+        if (leaf == null) {
+            throw new SignatureProcessingException("Could not parse the leaf certificate from x5c");
+        }
+
+        List<String> expectedCertificates = certInfo.certificates();
+        String expectedLeafBase64 = (expectedCertificates == null || expectedCertificates.isEmpty())
+                ? null : expectedCertificates.getFirst();
+        if (expectedLeafBase64 == null || !leaf.equals(X509CertUtils.parse(Base64.getDecoder().decode(expectedLeafBase64)))) {
+            throw new SignatureProcessingException(
+                    "Signed document's certificate does not match the credential's own certificate");
+        }
+
+        try {
+            JWSVerifier verifier = buildVerifier(header.getAlgorithm(), leaf);
+            if (!signedJWT.verify(verifier)) {
+                throw new SignatureProcessingException("Signature verification failed against the certificate in x5c");
+            }
+        } catch (JOSEException e) {
+            throw new SignatureProcessingException("Error verifying the signed document's signature");
+        }
+    }
+
+    private JWSVerifier buildVerifier(JWSAlgorithm alg, X509Certificate leaf) throws JOSEException {
+        if (JWSAlgorithm.Family.EC.contains(alg)) {
+            return new ECDSAVerifier((ECPublicKey) leaf.getPublicKey());
+        }
+        if (JWSAlgorithm.Family.RSA.contains(alg)) {
+            return new RSASSAVerifier((RSAPublicKey) leaf.getPublicKey());
+        }
+        throw new JOSEException("Unsupported algorithm family: " + alg);
     }
 }
