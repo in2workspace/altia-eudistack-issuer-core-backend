@@ -32,6 +32,12 @@ import java.util.Map;
 public class CscV2Adapter implements CscPort {
 
     private static final String CHAIN = "chain";
+    // Digitel's CSC v2 credentials/list returns 500 for a spec-conformant
+    // RFC 5646 `lang` string (CSC v2.1.0.1 §8.2 defines `lang` as string;
+    // verified against their STG endpoint 2026-09-07). It only accepts the
+    // pre-conformance int value. Fikua DSS enforces the spec-correct string.
+    // Workaround until Digitel fixes their implementation.
+    private static final String DIGITEL_PROVIDER = "digitel";
     private final CscAuthStrategyResolver authResolver;
     private final CscV2CertificateInfoMapper certificateInfoMapper;
     private final ObjectMapper objectMapper;
@@ -67,7 +73,7 @@ public class CscV2Adapter implements CscPort {
 
     @Override
     public Mono<Boolean> validateCredentialId(RemoteSignatureDto cfg, String accessToken, String credentialId) {
-        CscV2CredentialsListRequest body = new CscV2CredentialsListRequest(true, CHAIN, true, true, true, "en-US", "string");
+        CscV2CredentialsListRequest body = new CscV2CredentialsListRequest(true, CHAIN, true, true, true, langFor(cfg), "string");
 
         String url = cfg.url() + CscV2Paths.LIST;
         return post(url, accessToken, body)
@@ -83,7 +89,7 @@ public class CscV2Adapter implements CscPort {
 
     @Override
     public Mono<List<String>> listCredentialIds(RemoteSignatureDto cfg, String accessToken) {
-        CscV2CredentialsListRequest body = new CscV2CredentialsListRequest(true, CHAIN, true, true, true, "en-US", "string");
+        CscV2CredentialsListRequest body = new CscV2CredentialsListRequest(true, CHAIN, true, true, true, langFor(cfg), "string");
         return post(cfg.url() + CscV2Paths.LIST, accessToken, body)
                 .flatMap(json -> Mono.fromCallable(() -> {
                     CscV2CredentialsListResponse resp = objectMapper.readValue(json, CscV2CredentialsListResponse.class);
@@ -190,6 +196,12 @@ public class CscV2Adapter implements CscPort {
                     return resp.documentWithSignature().getFirst();
                 }))
                 .doOnError(error -> log.error("Error in signDoc: {}", error.getMessage()));
+    }
+
+    // Workaround for Digitel's non-conformant credentials/list — see
+    // DIGITEL_PROVIDER above.
+    private Object langFor(RemoteSignatureDto cfg) {
+        return DIGITEL_PROVIDER.equalsIgnoreCase(cfg.provider()) ? 0 : "en-US";
     }
 
     private Mono<String> post(String url, String accessToken, Object body) {
