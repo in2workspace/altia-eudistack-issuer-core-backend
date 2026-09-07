@@ -99,7 +99,9 @@ public class TenantCredentialProfileServiceImpl implements TenantCredentialProfi
                             .map(entry -> new CredentialCatalogEntryDto(
                                     entry.getKey(),
                                     resolveDisplayName(entry.getValue()),
-                                    enabledIds.contains(entry.getKey())))
+                                    enabledIds.contains(entry.getKey()),
+                                    List.of(),
+                                    List.of()))
                             .sorted(Comparator.comparing(CredentialCatalogEntryDto::displayName))
                             .toList())
                     .flatMap(entries -> {

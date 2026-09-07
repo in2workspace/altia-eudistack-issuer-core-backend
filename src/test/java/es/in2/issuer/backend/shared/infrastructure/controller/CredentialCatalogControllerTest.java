@@ -64,7 +64,7 @@ class CredentialCatalogControllerTest {
                 .thenReturn(Mono.just(admin()));
         when(tenantCredentialProfileService.getCatalog())
                 .thenReturn(Mono.just(List.of(
-                        new CredentialCatalogEntryDto("learcredential.employee.w3c.4", "Employee", true))));
+                        new CredentialCatalogEntryDto("learcredential.employee.w3c.4", "Employee", true, List.of(), List.of()))));
 
         webTestClient.get()
                 .uri(CREDENTIAL_CATALOG_PATH)
@@ -100,7 +100,7 @@ class CredentialCatalogControllerTest {
                 .thenReturn(Mono.just(readOnlyAdmin()));
         when(tenantCredentialProfileService.getCatalog())
                 .thenReturn(Mono.just(List.of(
-                        new CredentialCatalogEntryDto("learcredential.employee.w3c.4", "Employee", true))));
+                        new CredentialCatalogEntryDto("learcredential.employee.w3c.4", "Employee", true, List.of(), List.of()))));
 
         webTestClient.get()
                 .uri(CREDENTIAL_CATALOG_PATH)
