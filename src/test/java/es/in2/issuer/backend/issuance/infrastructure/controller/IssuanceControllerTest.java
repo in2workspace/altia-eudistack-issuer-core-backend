@@ -277,7 +277,8 @@ class IssuanceControllerTest {
                         .credentialOfferUri("openid-credential-offer://x")
                         .deliveryResults(List.of(
                                 DeliveryResult.delivered("direct"),
-                                DeliveryResult.dispatched("email")))
+                                DeliveryResult.dispatched("email"),
+                                DeliveryResult.dispatched("ui")))
                         .build()));
 
         webTestClient.mutateWith(csrf())
@@ -294,7 +295,10 @@ class IssuanceControllerTest {
                 .jsonPath("$.responses[0].body.signed_credential").isEqualTo("signed-jwt")
                 .jsonPath("$.responses[1].channel").isEqualTo("email")
                 .jsonPath("$.responses[1].status").isEqualTo(200)
-                .jsonPath("$.responses[1].body.credential_offer_uri").isEqualTo("openid-credential-offer://x");
+                .jsonPath("$.responses[1].body").doesNotExist()
+                .jsonPath("$.responses[2].channel").isEqualTo("ui")
+                .jsonPath("$.responses[2].status").isEqualTo(200)
+                .jsonPath("$.responses[2].body.credential_offer_uri").isEqualTo("openid-credential-offer://x");
     }
 
     /** D-5 retires the 202 wallet-only status: a fully successful request is always 200. */
@@ -308,7 +312,9 @@ class IssuanceControllerTest {
         when(issuanceWorkflow.issueCredential(anyString(), eq(request), isNull(), eq(BEARER_TOKEN), eq(PUBLIC_ISSUER_BASE_URL), eq(PUBLIC_WALLET_BASE_URL)))
                 .thenReturn(Mono.just(IssuanceResponse.builder()
                         .credentialOfferUri(credentialOfferUri)
-                        .deliveryResults(List.of(DeliveryResult.dispatched("email")))
+                        .deliveryResults(List.of(
+                                DeliveryResult.dispatched("email"),
+                                DeliveryResult.dispatched("ui")))
                         .build()));
 
         webTestClient.mutateWith(csrf())
@@ -322,8 +328,11 @@ class IssuanceControllerTest {
                 .expectBody()
                 .jsonPath("$.responses[0].channel").isEqualTo("email")
                 .jsonPath("$.responses[0].status").isEqualTo(200)
-                .jsonPath("$.responses[0].body.credential_offer_uri").isEqualTo(credentialOfferUri)
-                .jsonPath("$.responses[0].body.signed_credential").doesNotExist();
+                .jsonPath("$.responses[0].body").doesNotExist()
+                .jsonPath("$.responses[1].channel").isEqualTo("ui")
+                .jsonPath("$.responses[1].status").isEqualTo(200)
+                .jsonPath("$.responses[1].body.credential_offer_uri").isEqualTo(credentialOfferUri)
+                .jsonPath("$.responses[1].body.signed_credential").doesNotExist();
     }
 
     /**

@@ -68,9 +68,13 @@ class IssuanceHttpEnvelopeMapperTest {
         assertThat(channel.error()).isNull();
     }
 
-    /** The combined case: email dispatched alongside ui DOES carry the shared offer URI. */
+    /**
+     * The combined case: email dispatched alongside ui never carries the URI in its own item -- it was
+     * already delivered inside the email itself, not returned to the API caller through this channel.
+     * Only ui reports it.
+     */
     @Test
-    void toHttpResponse_EmailSucceededAlongsideUi_BodyCarriesTheSharedCredentialOfferUri() {
+    void toHttpResponse_EmailSucceededAlongsideUi_EmailHasNoBodyAndUiCarriesTheCredentialOfferUri() {
         IssuanceResponse response = IssuanceResponse.builder()
                 .credentialOfferUri("openid-credential-offer://x")
                 .deliveryResults(List.of(
@@ -80,7 +84,7 @@ class IssuanceHttpEnvelopeMapperTest {
 
         IssuanceHttpResponse httpResponse = mapper.toHttpResponse(response);
 
-        assertThat(httpResponse.responses().get(0).body().credentialOfferUri()).isEqualTo("openid-credential-offer://x");
+        assertThat(httpResponse.responses().get(0).body()).isNull();
         assertThat(httpResponse.responses().get(1).body().credentialOfferUri()).isEqualTo("openid-credential-offer://x");
     }
 

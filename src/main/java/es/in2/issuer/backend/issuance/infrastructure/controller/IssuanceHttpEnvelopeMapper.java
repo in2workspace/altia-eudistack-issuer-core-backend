@@ -16,11 +16,12 @@ import java.util.List;
  * Projects the domain-shaped {@link IssuanceResponse} (still flat: {@code signedCredential} /
  * {@code credentialOfferUri} / {@code deliveryResults}, produced by {@code IssuanceWorkflowImpl}
  * unchanged) onto the HTTP envelope EUD-167 D-5/D-6 specifies: one {@code responses[]} entry per
- * requested channel, {@code direct} carrying {@code signed_credential} in its {@code body}, and
- * {@code ui}/{@code email} carrying {@code credential_offer_uri} in it <em>only when there is one</em>
- * (an email-only dispatch has none -- see {@link #offerBody}) -- or an RFC 9457 {@code error} for a
- * failed channel. {@link IssuanceController} decides the response-line HTTP status (200/207/500) from
- * the same {@code deliveryResults}; this mapper only shapes the body.
+ * requested channel, {@code direct} carrying {@code signed_credential} in its {@code body}, {@code ui}
+ * carrying {@code credential_offer_uri} in it <em>only when there is one</em> (see {@link #offerBody}),
+ * and {@code email} never carrying a body of its own -- the URI was already delivered inside the email,
+ * not returned to the API caller through this channel -- or an RFC 9457 {@code error} for a failed
+ * channel. {@link IssuanceController} decides the response-line HTTP status (200/207/500) from the same
+ * {@code deliveryResults}; this mapper only shapes the body.
  */
 @Component
 public class IssuanceHttpEnvelopeMapper {
@@ -40,14 +41,18 @@ public class IssuanceHttpEnvelopeMapper {
     }
 
     private ChannelResponse succeededChannel(DeliveryResult result, IssuanceResponse response) {
-        // direct signs synchronously in this same request and returns the credential itself; ui/email
-        // both point at the same dispatched OID4VCI offer when there is one to point at. There isn't
-        // always: CredentialOfferServiceImpl only builds a URI when the requested modes include one
-        // that returnsUri (ui does, email alone does not) -- an email-only dispatch has nothing to
-        // report here, so body stays null rather than an uninformative empty object (B1, code-review).
+        // direct signs synchronously in this same request and returns the credential itself; ui points
+        // at the dispatched OID4VCI offer when there is one to point at (there isn't always --
+        // CredentialOfferServiceImpl only builds a URI when the requested modes include one that
+        // returnsUri, which ui does -- an email-only dispatch has nothing to report here, so body stays
+        // null rather than an uninformative empty object, B1 code-review). email never carries the URI
+        // in its own item, even alongside ui: the URI was already delivered inside the email body, not
+        // returned to the API caller through this channel of the response.
         ChannelBody body = DeliveryMode.DIRECT.value.equals(result.mode())
                 ? ChannelBody.builder().signedCredential(response.signedCredential()).build()
-                : offerBody(response.credentialOfferUri());
+                : DeliveryMode.UI.value.equals(result.mode())
+                ? offerBody(response.credentialOfferUri())
+                : null;
         return ChannelResponse.builder()
                 .channel(result.mode())
                 .status(200)
