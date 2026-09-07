@@ -60,6 +60,9 @@ public class IssuanceEntity {
     @Column("delivery")
     private String delivery;
 
+    @Column("grant_type")
+    private String grantType;
+
     @Column("credential_offer_refresh_token")
     private String credentialOfferRefreshToken;
 

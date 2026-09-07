@@ -102,10 +102,10 @@ public class TokenServiceImpl implements TokenService {
     }
 
     private String resolveGrantTag(String grantType) {
-        if (GRANT_TYPE.equals(grantType)) return "pre-authorized_code";
-        if (REFRESH_TOKEN_GRANT_TYPE.equals(grantType)) return "refresh_token";
-        if (AUTHORIZATION_CODE_GRANT_TYPE.equals(grantType)) return "authorization_code";
-        if (CLIENT_CREDENTIALS_GRANT_TYPE.equals(grantType)) return "client_credentials";
+        if (GRANT_TYPE.equals(grantType)) return PRE_AUTHORIZATION_CODE;
+        if (REFRESH_TOKEN_GRANT_TYPE.equals(grantType)) return REFRESH_TOKEN_GRANT_TYPE;
+        if (AUTHORIZATION_CODE_GRANT_TYPE.equals(grantType)) return AUTHORIZATION_CODE;
+        if (CLIENT_CREDENTIALS_GRANT_TYPE.equals(grantType)) return CLIENT_CREDENTIALS_GRANT_TYPE;
         return "unknown";
     }
 

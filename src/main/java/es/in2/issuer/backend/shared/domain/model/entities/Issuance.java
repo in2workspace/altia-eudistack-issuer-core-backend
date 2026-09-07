@@ -44,6 +44,9 @@ public class Issuance {
 
     private String delivery;
 
+    /** OID4VCI grant used when the offer was first delivered (refresh must reuse it). */
+    private String grantType;
+
     private String credentialOfferRefreshToken;
 
     @Nullable
