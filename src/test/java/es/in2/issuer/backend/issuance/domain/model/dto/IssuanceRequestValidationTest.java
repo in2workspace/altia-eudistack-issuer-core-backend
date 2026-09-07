@@ -69,25 +69,30 @@ class IssuanceRequestValidationTest {
         Set<ConstraintViolation<IssuanceRequest>> violations =
                 validator.validate(requestWithDelivery("direct\r\nX-Forged-Header: 1"));
 
-        assertThat(violations).isNotEmpty();
-        assertThat(violations).anyMatch(v -> v.getPropertyPath().toString().equals("delivery"));
+        assertThat(violations)
+                .isNotEmpty()
+                .anyMatch(v -> v.getPropertyPath().toString().equals("delivery"));
     }
 
     @Test
     void delivery_ExceedingMaxLength_IsRejected() {
         String tooLong = "direct,".repeat(20);
 
-        Set<ConstraintViolation<IssuanceRequest>> violations = validator.validate(requestWithDelivery(tooLong));
+        Set<ConstraintViolation<IssuanceRequest>> violations =
+                validator.validate(requestWithDelivery(tooLong));
 
-        assertThat(violations).isNotEmpty();
-        assertThat(violations).anyMatch(v -> v.getPropertyPath().toString().equals("delivery"));
+        assertThat(violations)
+                .isNotEmpty()
+                .anyMatch(v -> v.getPropertyPath().toString().equals("delivery"));
     }
 
     @Test
     void delivery_ContainingDigitsOrSymbols_IsRejected() {
-        Set<ConstraintViolation<IssuanceRequest>> violations = validator.validate(requestWithDelivery("direct;drop"));
+        Set<ConstraintViolation<IssuanceRequest>> violations =
+                validator.validate(requestWithDelivery("direct;drop"));
 
-        assertThat(violations).isNotEmpty();
-        assertThat(violations).anyMatch(v -> v.getPropertyPath().toString().equals("delivery"));
+        assertThat(violations)
+                .isNotEmpty()
+                .anyMatch(v -> v.getPropertyPath().toString().equals("delivery"));
     }
 }
