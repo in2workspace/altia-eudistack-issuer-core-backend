@@ -6,11 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.8.0] - 2026-09-07
+
 ### Fixed
 
 - **`IssuanceHttpEnvelopeMapper` decided which channel carries `credential_offer_uri` by comparing `result.mode()` against string literals instead of asking `DeliveryMode.returnsUri` (tech-debt TD-16, found by code-review of `8bc5e72a`)**: a future `DeliveryMode` with `returnsUri = true` would have silently fallen into the `else` branch and reported no URI at all — the same root-cause class as the original B1 bug. `DeliveryMode` gains `fromValue(String)` (the lookup pattern `parse` already used, extracted); `buildChannelBody` now resolves the mode and branches on `isDirect()`/`returnsUri` instead of two literal comparisons. No behavior change for the 3 existing modes — `IssuanceHttpEnvelopeMapperTest`, `IssuanceControllerTest` and the new `DeliveryModeTest.FromValue` cases all green.
 
-## [3.9.0] - 2026-09-07
 
 ### Changed
 
