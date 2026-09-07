@@ -41,6 +41,15 @@ public class IssuanceHttpEnvelopeMapper {
     }
 
     private ChannelResponse succeededChannel(DeliveryResult result, IssuanceResponse response) {
+        ChannelBody body = buildChannelBody(result, response);
+        return ChannelResponse.builder()
+                .channel(result.mode())
+                .status(200)
+                .body(body)
+                .build();
+    }
+
+    private ChannelBody buildChannelBody(DeliveryResult result, IssuanceResponse response) {
         // direct signs synchronously in this same request and returns the credential itself; ui points
         // at the dispatched OID4VCI offer when there is one to point at (there isn't always --
         // CredentialOfferServiceImpl only builds a URI when the requested modes include one that
@@ -48,16 +57,17 @@ public class IssuanceHttpEnvelopeMapper {
         // null rather than an uninformative empty object, B1 code-review). email never carries the URI
         // in its own item, even alongside ui: the URI was already delivered inside the email body, not
         // returned to the API caller through this channel of the response.
-        ChannelBody body = DeliveryMode.DIRECT.value.equals(result.mode())
-                ? ChannelBody.builder().signedCredential(response.signedCredential()).build()
-                : DeliveryMode.UI.value.equals(result.mode())
-                ? offerBody(response.credentialOfferUri())
-                : null;
-        return ChannelResponse.builder()
-                .channel(result.mode())
-                .status(200)
-                .body(body)
-                .build();
+        if (DeliveryMode.DIRECT.value.equals(result.mode())) {
+            return ChannelBody.builder()
+                    .signedCredential(response.signedCredential())
+                    .build();
+        }
+
+        if (DeliveryMode.UI.value.equals(result.mode())) {
+            return offerBody(response.credentialOfferUri());
+        }
+
+        return null;
     }
 
     private ChannelBody offerBody(String credentialOfferUri) {
