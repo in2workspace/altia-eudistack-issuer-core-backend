@@ -135,8 +135,8 @@ class IssuanceWorkflowImplTest {
 
         verify(issuanceService).saveIssuance(any(Issuance.class));
         verify(credentialOfferService).createAndDeliverCredentialOffer(
-                eq(issuanceId.toString()), eq(CONFIG_ID), eq(AUTHORIZATION_CODE),
-                eq(EMAIL), eq("email"), eq("refresh-token-123"), eq(BASE_URL), eq(WALLET_URL));
+                issuanceId.toString(), CONFIG_ID, AUTHORIZATION_CODE,
+                EMAIL, "email", "refresh-token-123", BASE_URL, WALLET_URL);
         // A wallet offer is not an emitted credential — only the OID4VCI /credential endpoint
         // (where the wallet actually collects it) counts this leg.
         verify(credentialIssuedLogger, never()).logIssued(any());
