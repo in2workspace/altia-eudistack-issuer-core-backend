@@ -26,7 +26,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class DeliveryEligibilityResolver {
 
-    private final TenantDeliveryConfigService tenantDeliveryConfigService;
+    private final TenantCredentialProfileService tenantCredentialProfileService;
     private final SchemaDeliveryCeiling schemaDeliveryCeiling;
 
     public Mono<Set<DeliveryMode>> resolveEligibleModes(String credentialConfigurationId) {
@@ -34,11 +34,16 @@ public class DeliveryEligibilityResolver {
         // throw for an unknown configuration ID, and a caller composing this Mono outside a defer of its
         // own must still see that failure as an onError signal, not an assembly-time exception.
         return Mono.fromSupplier(() -> schemaDeliveryCeiling.resolveEligibleModes(credentialConfigurationId))
-                .flatMap(ceiling -> tenantDeliveryConfigService.getEligibleModes(credentialConfigurationId)
-                        .<Set<DeliveryMode>>map(configured -> configured.stream()
-                                .filter(ceiling::contains)
-                                .collect(Collectors.toCollection(() -> EnumSet.noneOf(DeliveryMode.class))))
-                        .switchIfEmpty(Mono.just(ceiling)));
+                .flatMap(ceiling -> tenantCredentialProfileService.findConfiguredDeliveryModes(credentialConfigurationId)
+                        // findConfiguredDeliveryModes (AD-8) always emits -- an empty Set IS the "not
+                        // configured" sentinel, never an empty Mono, so the fallback to the ceiling must
+                        // branch on Set emptiness here, not on Mono#switchIfEmpty (which would never fire
+                        // and would incorrectly return an empty result instead of the ceiling, EC-09 vs P-1).
+                        .map(configured -> configured.isEmpty()
+                                ? ceiling
+                                : configured.stream()
+                                        .filter(ceiling::contains)
+                                        .collect(Collectors.toCollection(() -> EnumSet.noneOf(DeliveryMode.class)))));
     }
 
 }
