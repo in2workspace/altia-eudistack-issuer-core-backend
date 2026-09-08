@@ -260,6 +260,24 @@ class SecurityConfigTest {
             assertEquals(HttpStatus.UNAUTHORIZED, executeFilter(exchange));
         }
 
+        // ES-07 (EUD-169): the credential-catalog admin surface rejects an unauthenticated
+        // caller before any catalog logic runs, same as every other authenticated path here.
+        @Test
+        void credentialCatalog_get_shouldReturn401_whenNoAuth() {
+            MockServerWebExchange exchange = MockServerWebExchange.from(
+                    MockServerHttpRequest.get(CREDENTIAL_CATALOG_PATH).build()
+            );
+            assertEquals(HttpStatus.UNAUTHORIZED, executeFilter(exchange));
+        }
+
+        @Test
+        void credentialCatalog_put_shouldReturn401_whenNoAuth() {
+            MockServerWebExchange exchange = MockServerWebExchange.from(
+                    MockServerHttpRequest.put(CREDENTIAL_CATALOG_PATH).build()
+            );
+            assertEquals(HttpStatus.UNAUTHORIZED, executeFilter(exchange));
+        }
+
     }
 
     // ── Authenticated endpoints — 200 with valid Bearer token ───────────
