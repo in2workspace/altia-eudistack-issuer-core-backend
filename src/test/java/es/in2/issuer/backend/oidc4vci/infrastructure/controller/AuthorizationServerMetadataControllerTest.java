@@ -3,6 +3,7 @@ package es.in2.issuer.backend.oidc4vci.infrastructure.controller;
 import es.in2.issuer.backend.oidc4vci.application.workflow.GetAuthorizationServerMetadataWorkflow;
 import es.in2.issuer.backend.oidc4vci.domain.model.AuthorizationServerMetadata;
 import es.in2.issuer.backend.oidc4vci.domain.service.NonceService;
+import es.in2.issuer.backend.shared.domain.service.AccessTokenService;
 import es.in2.issuer.backend.shared.domain.service.TenantRegistryService;
 import es.in2.issuer.backend.shared.domain.spi.UrlResolver;
 import es.in2.issuer.backend.shared.infrastructure.config.IssuanceMetrics;
@@ -48,6 +49,9 @@ class AuthorizationServerMetadataControllerTest {
 
     @MockBean
     private UrlResolver urlResolver;
+
+    @MockBean
+    private AccessTokenService accessTokenService;
 
     @Test
     void testGetAuthorizationServerMetadataSuccess() {

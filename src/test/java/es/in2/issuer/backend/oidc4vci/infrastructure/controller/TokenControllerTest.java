@@ -6,6 +6,7 @@ import es.in2.issuer.backend.oidc4vci.domain.model.TokenResponse;
 import es.in2.issuer.backend.oidc4vci.domain.service.NonceService;
 import es.in2.issuer.backend.oidc4vci.domain.service.TokenService;
 import es.in2.issuer.backend.shared.domain.model.port.IssuerProperties;
+import es.in2.issuer.backend.shared.domain.service.AccessTokenService;
 import es.in2.issuer.backend.shared.domain.service.TenantRegistryService;
 import es.in2.issuer.backend.shared.infrastructure.config.IssuanceMetrics;
 import es.in2.issuer.backend.shared.infrastructure.controller.error.ErrorResponseFactory;
@@ -55,6 +56,9 @@ class TokenControllerTest {
 
     @MockBean
     es.in2.issuer.backend.shared.domain.spi.UrlResolver urlResolver;
+
+    @MockBean
+    AccessTokenService accessTokenService;
 
     @Test
     void testHandleTokenRequest_RefreshTokenGrant_ShouldReturnOk() {

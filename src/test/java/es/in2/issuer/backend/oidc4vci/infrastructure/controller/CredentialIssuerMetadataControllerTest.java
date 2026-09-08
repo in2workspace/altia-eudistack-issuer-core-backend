@@ -4,6 +4,7 @@ import es.in2.issuer.backend.oidc4vci.application.workflow.GetCredentialIssuerMe
 import es.in2.issuer.backend.oidc4vci.domain.model.CredentialIssuerMetadata;
 import es.in2.issuer.backend.shared.domain.model.dto.credential.profile.CredentialProfile;
 import es.in2.issuer.backend.oidc4vci.domain.service.NonceService;
+import es.in2.issuer.backend.shared.domain.service.AccessTokenService;
 import es.in2.issuer.backend.shared.domain.service.TenantRegistryService;
 import es.in2.issuer.backend.shared.infrastructure.config.IssuanceMetrics;
 import es.in2.issuer.backend.shared.infrastructure.controller.error.ErrorResponseFactory;
@@ -50,6 +51,9 @@ class CredentialIssuerMetadataControllerTest {
 
     @MockBean
     private es.in2.issuer.backend.shared.domain.spi.UrlResolver urlResolver;
+
+    @MockBean
+    private AccessTokenService accessTokenService;
 
     @Test
     void testGetCredentialIssuer_Metadata_Success() {
