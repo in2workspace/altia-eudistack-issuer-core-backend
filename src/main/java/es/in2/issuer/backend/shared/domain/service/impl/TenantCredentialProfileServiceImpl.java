@@ -78,10 +78,21 @@ public class TenantCredentialProfileServiceImpl implements TenantCredentialProfi
                 .map(enabledIds -> enabledIds.contains(credentialConfigurationId));
     }
 
+    /**
+     * Unlike {@link #getEnabledConfigurationIds()} (tolerant of a missing tenant --
+     * {@link es.in2.issuer.backend.shared.domain.service.impl.CredentialIssuerMetadataServiceImpl}
+     * reads it for public, unauthenticated metadata), this feeds a security decision
+     * ({@link es.in2.issuer.backend.shared.domain.service.DeliveryEligibilityResolver} on the
+     * issuance path) and must fail closed rather than silently resolve against {@code public}
+     * schema (security review, EUD-169).
+     */
     @Override
     public Mono<Set<DeliveryMode>> findConfiguredDeliveryModes(String credentialConfigurationId) {
-        return getTenantModesMap()
-                .map(modesMap -> modesMap.getOrDefault(credentialConfigurationId, Set.of()));
+        return Mono.deferContextual(ctx -> {
+            requireTenant(ctx);
+            return getTenantModesMap()
+                    .map(modesMap -> modesMap.getOrDefault(credentialConfigurationId, Set.of()));
+        });
     }
 
     @Override

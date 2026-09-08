@@ -277,6 +277,21 @@ class TenantCredentialProfileServiceImplTest {
     }
 
     /**
+     * Security review (EUD-169): unlike getEnabledConfigurationIds() (tolerant, read by public
+     * metadata), this feeds an issuance-time security decision and must fail closed rather than
+     * silently resolve against the "unknown"/public schema.
+     */
+    @Test
+    void findConfiguredDeliveryModes_noTenantInContext_badRequest() {
+        StepVerifier.create(service.findConfiguredDeliveryModes("A"))
+                .expectErrorSatisfies(e -> assertThat(((ResponseStatusException) e).getStatusCode())
+                        .isEqualTo(HttpStatus.BAD_REQUEST))
+                .verify();
+
+        verify(repository, never()).findAllByEnabledTrue();
+    }
+
+    /**
      * AC-06: the per-tenant cache keys on the tenant, so two tenants never see each
      * other's enabled ids even though the repository mock is shared.
      */
