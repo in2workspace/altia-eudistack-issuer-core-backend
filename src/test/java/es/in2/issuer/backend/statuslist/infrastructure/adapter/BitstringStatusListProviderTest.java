@@ -1476,7 +1476,11 @@ class BitstringStatusListProviderTest {
 
     @Test
     void releaseEntry_shouldThrow_whenIssuanceIdIsNull() {
-        assertThatThrownBy(() -> monoFromCall(() -> bitstringStatusListProvider.releaseEntry(null)).block())
+        Mono<Void> mono = monoFromCall(() ->
+                bitstringStatusListProvider.releaseEntry(null)
+        );
+
+        assertThatThrownBy(mono::block)
                 .isInstanceOf(RuntimeException.class);
 
         verifyNoInteractions(statusListIndexRepository);
