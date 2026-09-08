@@ -206,6 +206,7 @@ public class TenantCredentialProfileServiceImpl implements TenantCredentialProfi
                     .collect(Collectors.toMap(
                             TenantCredentialProfile::credentialConfigurationId,
                             row -> parseStoredModes(row.deliveryModes())))
+                    .map(Map::copyOf)
                     .doOnNext(modesMap -> {
                         cache.put(tenant, modesMap);
                         log.debug("Loaded {} enabled credential profiles for tenant '{}'", modesMap.size(), tenant);
@@ -214,7 +215,7 @@ public class TenantCredentialProfileServiceImpl implements TenantCredentialProfi
     }
 
     private static Set<DeliveryMode> parseStoredModes(String csv) {
-        return (csv == null || csv.isBlank()) ? Set.of() : DeliveryMode.parse(csv);
+        return (csv == null || csv.isBlank()) ? Set.of() : Set.copyOf(DeliveryMode.parse(csv));
     }
 
     private static List<String> sortedValues(Set<DeliveryMode> modes) {

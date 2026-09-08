@@ -56,8 +56,9 @@ public class IssuanceExceptionHandler {
     }
 
     // Also mapped in SharedExceptionHandler (EUD-168 code review): the exception itself lives in the
-    // shared package and is thrown by both the issuance path and the backoffice delivery-config PUT,
-    // which does not go through this advice in isolated (non-Spring-context) test setups such as
+    // shared package and is thrown by both the issuance path and the credential-catalog PUT
+    // (EUD-169; the backoffice delivery-config module this comment used to name was retired), which
+    // does not go through this advice in isolated (non-Spring-context) test setups such as
     // DirectDeliveryCeilingTest -- kept here too so the issuance path's own tests stay decoupled from
     // SharedExceptionHandler.
     @ExceptionHandler(DeliveryModeNotEligibleException.class)
