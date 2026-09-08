@@ -26,7 +26,7 @@ class DeliveryEligibilityResolverTest {
     private static final Set<DeliveryMode> ALL_MODES = EnumSet.allOf(DeliveryMode.class);
 
     @Mock
-    private TenantDeliveryConfigService tenantDeliveryConfigService;
+    private TenantCredentialProfileService tenantCredentialProfileService;
 
     @Mock
     private SchemaDeliveryCeiling schemaDeliveryCeiling;
@@ -40,7 +40,9 @@ class DeliveryEligibilityResolverTest {
         @Test
         void resolveEligibleModes_noConfigAndUnboundType_defaultsToEveryMode() {
             when(schemaDeliveryCeiling.resolveEligibleModes(UNBOUND)).thenReturn(ALL_MODES);
-            when(tenantDeliveryConfigService.getEligibleModes(UNBOUND)).thenReturn(Mono.empty());
+            // findConfiguredDeliveryModes always emits (AD-8): an empty Set is the "not configured"
+            // sentinel, never an empty Mono.
+            when(tenantCredentialProfileService.findConfiguredDeliveryModes(UNBOUND)).thenReturn(Mono.just(Set.of()));
 
             StepVerifier.create(resolver.resolveEligibleModes(UNBOUND))
                     .assertNext(modes -> assertEquals(ALL_MODES, modes))
@@ -50,7 +52,7 @@ class DeliveryEligibilityResolverTest {
         @Test
         void resolveEligibleModes_noConfigAndBoundType_defaultsToWalletModesOnly() {
             when(schemaDeliveryCeiling.resolveEligibleModes(BOUND)).thenReturn(WALLET_ONLY);
-            when(tenantDeliveryConfigService.getEligibleModes(BOUND)).thenReturn(Mono.empty());
+            when(tenantCredentialProfileService.findConfiguredDeliveryModes(BOUND)).thenReturn(Mono.just(Set.of()));
 
             StepVerifier.create(resolver.resolveEligibleModes(BOUND))
                     .assertNext(modes -> assertEquals(WALLET_ONLY, modes))
@@ -64,7 +66,7 @@ class DeliveryEligibilityResolverTest {
         @Test
         void resolveEligibleModes_configNarrowerThanCeiling_returnsTheConfiguredSubset() {
             when(schemaDeliveryCeiling.resolveEligibleModes(UNBOUND)).thenReturn(ALL_MODES);
-            when(tenantDeliveryConfigService.getEligibleModes(UNBOUND))
+            when(tenantCredentialProfileService.findConfiguredDeliveryModes(UNBOUND))
                     .thenReturn(Mono.just(EnumSet.of(DeliveryMode.EMAIL)));
 
             StepVerifier.create(resolver.resolveEligibleModes(UNBOUND))
@@ -80,7 +82,7 @@ class DeliveryEligibilityResolverTest {
         @Test
         void resolveEligibleModes_legacyConfigEnablingDirectOnBoundType_intersectsItAway() {
             when(schemaDeliveryCeiling.resolveEligibleModes(BOUND)).thenReturn(WALLET_ONLY);
-            when(tenantDeliveryConfigService.getEligibleModes(BOUND))
+            when(tenantCredentialProfileService.findConfiguredDeliveryModes(BOUND))
                     .thenReturn(Mono.just(EnumSet.of(DeliveryMode.DIRECT, DeliveryMode.EMAIL)));
 
             StepVerifier.create(resolver.resolveEligibleModes(BOUND))
@@ -91,7 +93,7 @@ class DeliveryEligibilityResolverTest {
         @Test
         void resolveEligibleModes_configEntirelyAboveTheCeiling_returnsEmptyRatherThanTheCeiling() {
             when(schemaDeliveryCeiling.resolveEligibleModes(BOUND)).thenReturn(WALLET_ONLY);
-            when(tenantDeliveryConfigService.getEligibleModes(BOUND))
+            when(tenantCredentialProfileService.findConfiguredDeliveryModes(BOUND))
                     .thenReturn(Mono.just(EnumSet.of(DeliveryMode.DIRECT)));
 
             // Empty is the honest answer: the tenant configured exactly one mode and the schema forbids it.
