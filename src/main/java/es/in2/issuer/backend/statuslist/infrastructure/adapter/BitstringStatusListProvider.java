@@ -49,6 +49,8 @@ import static es.in2.issuer.backend.statuslist.domain.util.Preconditions.require
 @RequiredArgsConstructor
 public class BitstringStatusListProvider implements StatusListProvider {
 
+    private static final String ISSUANCE_ID_PARAM = "issuanceId";
+
     private final StatusListRepository statusListRepository;
     private final StatusListIndexRepository statusListIndexRepository;
     private final BitstringStatusListCredentialFactory bitstringFactory;
@@ -100,7 +102,7 @@ public class BitstringStatusListProvider implements StatusListProvider {
                                                String issuanceId, String token, String publicIssuerBaseUrl) {
         requireNonNullParam(purpose, "purpose");
         requireNonNullParam(format, "format");
-        requireNonNullParam(issuanceId, "issuanceId");
+        requireNonNullParam(issuanceId, ISSUANCE_ID_PARAM);
         requireNonNullParam(token, TOKEN);
         requireNonNullParam(publicIssuerBaseUrl, "publicIssuerBaseUrl");
 
@@ -124,7 +126,7 @@ public class BitstringStatusListProvider implements StatusListProvider {
     @Override
     @Observed(name = "statuslist.provider.release-entry", contextualName = "statuslist-provider-release-entry")
     public Mono<Void> releaseEntry(String issuanceId) {
-        requireNonNullParam(issuanceId, "issuanceId");
+        requireNonNullParam(issuanceId, ISSUANCE_ID_PARAM);
 
         log.debug("method=releaseEntry step=START issuanceId={}", issuanceId);
 
@@ -138,7 +140,7 @@ public class BitstringStatusListProvider implements StatusListProvider {
     @Override
     @Observed(name = "statuslist.provider.revoke", contextualName = "statuslist-provider-revoke")
     public Mono<Void> revoke(String issuanceId, String token, String publicIssuerBaseUrl) {
-        requireNonNullParam(issuanceId, "issuanceId");
+        requireNonNullParam(issuanceId, ISSUANCE_ID_PARAM);
         requireNonNullParam(publicIssuerBaseUrl, "publicIssuerBaseUrl");
 
         log.debug("method=revoke step=START issuanceId={}", issuanceId);
@@ -172,11 +174,11 @@ public class BitstringStatusListProvider implements StatusListProvider {
                         Retry.backoff(maxAttempts - 1, Duration.ofMillis(50))
                                 .filter(OptimisticUpdateException.class::isInstance)
                                 .doBeforeRetry(rs ->
-                                    log.debug(
-                                        "method=revokeWithRetry retry={} statusListId={} idx={}",
-                                            rs.totalRetries() + 1, statusListId, idx
+                                        log.debug(
+                                                "method=revokeWithRetry retry={} statusListId={} idx={}",
+                                                rs.totalRetries() + 1, statusListId, idx
+                                        )
                                 )
-    )
                 )
                 .doOnTerminate(() ->
                         log.debug("method=revokeWithRetry step=END statusListId={} idx={}", statusListId, idx)
@@ -199,11 +201,11 @@ public class BitstringStatusListProvider implements StatusListProvider {
                     return getIssuerAndSignCredential(updatedRow, token, publicIssuerBaseUrl)
                             .flatMap(signedJwt ->
                                     statusListRepository.updateSignedAndEncodedIfUnchanged(
-                                                    row.id(),
-                                                    updatedRow.encodedList(),
-                                                    signedJwt,
-                                                    row.updatedAt()
-                                            )
+                                            row.id(),
+                                            updatedRow.encodedList(),
+                                            signedJwt,
+                                            row.updatedAt()
+                                    )
 
                             )
                             .flatMap(rowsUpdated -> {
