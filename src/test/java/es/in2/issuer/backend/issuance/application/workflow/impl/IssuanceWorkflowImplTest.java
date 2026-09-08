@@ -121,8 +121,8 @@ class IssuanceWorkflowImplTest {
         when(genericCredentialBuilder.buildCredential(profile, payload)).thenReturn(Mono.just(buildResult));
         when(issuanceService.saveIssuance(any(Issuance.class))).thenReturn(Mono.just(savedIssuance));
         when(credentialOfferService.createAndDeliverCredentialOffer(
-                eq(issuanceId.toString()), eq(CONFIG_ID), eq(AUTHORIZATION_CODE),
-                eq(EMAIL), eq("email"), eq("refresh-token-123"), eq(BASE_URL), eq(WALLET_URL)))
+                issuanceId.toString(), CONFIG_ID, AUTHORIZATION_CODE,
+                EMAIL, "email", "refresh-token-123", BASE_URL, WALLET_URL))
                 .thenReturn(Mono.just(offerResult));
         when(issuanceMetrics.startTimer()).thenReturn(Timer.start(new SimpleMeterRegistry()));
 
@@ -1490,8 +1490,8 @@ class IssuanceWorkflowImplTest {
         when(genericCredentialBuilder.buildCredential(profile, payload)).thenReturn(Mono.just(buildResult));
         when(issuanceService.saveIssuance(any(Issuance.class))).thenReturn(Mono.just(savedIssuance));
         when(credentialOfferService.createAndDeliverCredentialOffer(
-                eq(issuanceId.toString()), eq(CONFIG_ID), eq(AUTHORIZATION_CODE),
-                eq(EMAIL), eq("email"), eq("refresh-token-123"), eq(BASE_URL), eq(WALLET_URL)))
+                issuanceId.toString(), CONFIG_ID, AUTHORIZATION_CODE,
+                EMAIL, "email", "refresh-token-123", BASE_URL, WALLET_URL))
                 .thenReturn(Mono.just(offerResult));
         when(issuanceMetrics.startTimer()).thenReturn(Timer.start(new SimpleMeterRegistry()));
 

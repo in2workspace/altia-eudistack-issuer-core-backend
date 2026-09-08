@@ -85,14 +85,14 @@ class CredentialOfferRefreshWorkflowImplTest {
         when(issuanceService.getIssuanceByCredentialOfferRefreshToken(CREDENTIAL_OFFER_REFRESH_TOKEN))
                 .thenReturn(Mono.just(issuance));
         when(credentialOfferService.createAndDeliverCredentialOffer(
-                eq(issuanceId.toString()),
-                eq(CREDENTIAL_TYPE),
-                eq(preAuthGrant),
-                eq(EMAIL),
-                eq(DeliveryMode.EMAIL.value),
-                eq(CREDENTIAL_OFFER_REFRESH_TOKEN),
-                eq(PUBLIC_ISSUER_BASE_URL),
-                eq(PUBLIC_WALLET_BASE_URL)))
+                issuanceId.toString(),
+                CREDENTIAL_TYPE,
+                preAuthGrant,
+                EMAIL,
+                DeliveryMode.EMAIL.value,
+                CREDENTIAL_OFFER_REFRESH_TOKEN,
+                PUBLIC_ISSUER_BASE_URL,
+                PUBLIC_WALLET_BASE_URL))
                 .thenReturn(Mono.just(CredentialOfferResult.builder().build()));
 
         StepVerifier.create(workflow.refreshCredentialOffer(CREDENTIAL_OFFER_REFRESH_TOKEN, PUBLIC_ISSUER_BASE_URL, PUBLIC_WALLET_BASE_URL))
@@ -100,14 +100,14 @@ class CredentialOfferRefreshWorkflowImplTest {
 
         verify(issuanceService).getIssuanceByCredentialOfferRefreshToken(CREDENTIAL_OFFER_REFRESH_TOKEN);
         verify(credentialOfferService).createAndDeliverCredentialOffer(
-                eq(issuanceId.toString()),
-                eq(CREDENTIAL_TYPE),
-                eq(preAuthGrant),
-                eq(EMAIL),
-                eq(DeliveryMode.EMAIL.value),
-                eq(CREDENTIAL_OFFER_REFRESH_TOKEN),
-                eq(PUBLIC_ISSUER_BASE_URL),
-                eq(PUBLIC_WALLET_BASE_URL));
+                issuanceId.toString(),
+                CREDENTIAL_TYPE,
+                preAuthGrant,
+                EMAIL,
+                DeliveryMode.EMAIL.value,
+                CREDENTIAL_OFFER_REFRESH_TOKEN,
+                PUBLIC_ISSUER_BASE_URL,
+                PUBLIC_WALLET_BASE_URL);
     }
 
     @Test
