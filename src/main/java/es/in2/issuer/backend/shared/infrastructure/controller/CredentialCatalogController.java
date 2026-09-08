@@ -1,8 +1,10 @@
 package es.in2.issuer.backend.shared.infrastructure.controller;
 
+import es.in2.issuer.backend.shared.domain.exception.InvalidDeliveryConfigException;
 import es.in2.issuer.backend.shared.domain.model.dto.AuthorizationContext;
 import es.in2.issuer.backend.shared.domain.model.dto.CredentialCatalogEntryDto;
 import es.in2.issuer.backend.shared.domain.model.dto.UpdateCredentialCatalogRequest;
+import es.in2.issuer.backend.shared.domain.model.enums.DeliveryMode;
 import es.in2.issuer.backend.shared.domain.service.AccessTokenService;
 import es.in2.issuer.backend.shared.domain.service.TenantCredentialProfileService;
 import jakarta.validation.Valid;
@@ -21,6 +23,9 @@ import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Mono;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import static es.in2.issuer.backend.shared.domain.util.EndpointsConstants.CREDENTIAL_CATALOG_PATH;
 
@@ -65,7 +70,31 @@ public class CredentialCatalogController {
             @RequestHeader(HttpHeaders.AUTHORIZATION) String authorizationHeader,
             @Valid @RequestBody UpdateCredentialCatalogRequest request) {
         return authorizeTenantAdminWrite(authorizationHeader)
-                .then(Mono.defer(() -> tenantCredentialProfileService.updateCatalog(request.enabledConfigurationIds())));
+                .then(Mono.defer(() -> tenantCredentialProfileService.updateCatalog(
+                        request.enabledConfigurationIds(),
+                        parseDeliveryModes(request.deliveryModesByConfigurationId()))));
+    }
+
+    /**
+     * Raw strings, parsed here rather than in the DTO (task-planner decision): keeps
+     * {@code DeliveryMode.parse} -- not this controller -- as the single source of truth for
+     * which combinations are valid (ES-01 unknown value, ES-02 empty set).
+     */
+    private Map<String, Set<DeliveryMode>> parseDeliveryModes(Map<String, Set<String>> deliveryModesByConfigurationId) {
+        if (deliveryModesByConfigurationId == null) {
+            return Map.of();
+        }
+        return deliveryModesByConfigurationId.entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, entry -> parseModes(entry.getKey(), entry.getValue())));
+    }
+
+    private Set<DeliveryMode> parseModes(String credentialConfigurationId, Set<String> rawModes) {
+        try {
+            return DeliveryMode.parse(String.join(",", rawModes));
+        } catch (IllegalArgumentException e) {
+            throw new InvalidDeliveryConfigException(
+                    "Invalid delivery modes for credential configuration id '" + credentialConfigurationId + "': " + e.getMessage());
+        }
     }
 
     private Mono<AuthorizationContext> authorizeTenantAdminRead(String authorizationHeader) {
