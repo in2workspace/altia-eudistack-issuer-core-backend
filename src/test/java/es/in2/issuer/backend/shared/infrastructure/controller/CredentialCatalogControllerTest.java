@@ -1,6 +1,8 @@
 package es.in2.issuer.backend.shared.infrastructure.controller;
 
 import es.in2.issuer.backend.shared.domain.exception.CredentialCatalogNotConfiguredException;
+import es.in2.issuer.backend.shared.domain.exception.DeliveryModeNotEligibleException;
+import es.in2.issuer.backend.shared.domain.exception.InvalidDeliveryConfigException;
 import es.in2.issuer.backend.shared.domain.exception.UnknownCredentialConfigurationException;
 import es.in2.issuer.backend.shared.domain.model.dto.AuthorizationContext;
 import es.in2.issuer.backend.shared.domain.model.dto.CredentialCatalogEntryDto;
@@ -115,7 +117,7 @@ class CredentialCatalogControllerTest {
     void updateCatalog_asTenantAdmin_returns200() {
         when(accessTokenService.getAuthorizationContext(anyString()))
                 .thenReturn(Mono.just(admin()));
-        when(tenantCredentialProfileService.updateCatalog(any()))
+        when(tenantCredentialProfileService.updateCatalog(any(), any()))
                 .thenReturn(Mono.empty());
 
         webTestClient.mutateWith(csrf())
@@ -142,7 +144,7 @@ class CredentialCatalogControllerTest {
                 .exchange()
                 .expectStatus().isForbidden();
 
-        verify(tenantCredentialProfileService, never()).updateCatalog(any());
+        verify(tenantCredentialProfileService, never()).updateCatalog(any(), any());
     }
 
     @Test
@@ -159,14 +161,14 @@ class CredentialCatalogControllerTest {
                 .exchange()
                 .expectStatus().isForbidden();
 
-        verify(tenantCredentialProfileService, never()).updateCatalog(any());
+        verify(tenantCredentialProfileService, never()).updateCatalog(any(), any());
     }
 
     @Test
     void updateCatalog_unknownId_returns400() {
         when(accessTokenService.getAuthorizationContext(anyString()))
                 .thenReturn(Mono.just(admin()));
-        when(tenantCredentialProfileService.updateCatalog(any()))
+        when(tenantCredentialProfileService.updateCatalog(any(), any()))
                 .thenReturn(Mono.error(new UnknownCredentialConfigurationException(
                         "Unknown credential configuration id(s): [nope]")));
 
@@ -176,6 +178,124 @@ class CredentialCatalogControllerTest {
                 .header("Authorization", "Bearer token")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue("{\"enabledConfigurationIds\":[\"nope\"]}")
+                .exchange()
+                .expectStatus().isBadRequest();
+    }
+
+    /**
+     * AC-01: the catalog read carries both the eligible modes and the schema ceiling,
+     * so the admin UI can disable the direct mode by reading the ceiling alone.
+     */
+    @Test
+    void getCatalog_asTenantAdmin_includesDeliveryModesAndSchemaCeiling() {
+        when(accessTokenService.getAuthorizationContext(anyString()))
+                .thenReturn(Mono.just(admin()));
+        when(tenantCredentialProfileService.getCatalog())
+                .thenReturn(Mono.just(List.of(
+                        new CredentialCatalogEntryDto("learcredential.employee.w3c.4", "Employee", true,
+                                List.of("email", "ui"), List.of("email", "ui")))));
+
+        webTestClient.get()
+                .uri(CREDENTIAL_CATALOG_PATH)
+                .header("Authorization", "Bearer token")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$[0].deliveryModes[0]").isEqualTo("email")
+                .jsonPath("$[0].deliveryModes[1]").isEqualTo("ui")
+                .jsonPath("$[0].schemaEligibleModes[0]").isEqualTo("email")
+                .jsonPath("$[0].schemaEligibleModes[1]").isEqualTo("ui");
+    }
+
+    /**
+     * AC-04: rejecting a mode above the schema ceiling is a 409 conflict, not a 400 --
+     * distinct from the payload-shape errors below (ES-01..03).
+     */
+    @Test
+    void updateCatalog_directAboveSchemaCeiling_returns409() {
+        when(accessTokenService.getAuthorizationContext(anyString()))
+                .thenReturn(Mono.just(admin()));
+        when(tenantCredentialProfileService.updateCatalog(any(), any()))
+                .thenReturn(Mono.error(new DeliveryModeNotEligibleException(
+                        "Delivery mode 'direct' is not eligible for credential type "
+                                + "'learcredential.employee.w3c.4': its schema requires cryptographic holder binding. "
+                                + "Eligible modes: email,ui")));
+
+        webTestClient.mutateWith(csrf())
+                .put()
+                .uri(CREDENTIAL_CATALOG_PATH)
+                .header("Authorization", "Bearer token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"enabledConfigurationIds\":[\"learcredential.employee.w3c.4\"],"
+                        + "\"deliveryModesByConfigurationId\":{\"learcredential.employee.w3c.4\":[\"direct\"]}}")
+                .exchange()
+                .expectStatus().isEqualTo(409);
+    }
+
+    /**
+     * ES-01: an unknown delivery-mode token is a 400, parsed and rejected by the controller
+     * itself -- the service is never reached.
+     */
+    @Test
+    void updateCatalog_unknownDeliveryModeToken_returns400WithoutCallingService() {
+        when(accessTokenService.getAuthorizationContext(anyString()))
+                .thenReturn(Mono.just(admin()));
+
+        webTestClient.mutateWith(csrf())
+                .put()
+                .uri(CREDENTIAL_CATALOG_PATH)
+                .header("Authorization", "Bearer token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"enabledConfigurationIds\":[\"learcredential.employee.w3c.4\"],"
+                        + "\"deliveryModesByConfigurationId\":{\"learcredential.employee.w3c.4\":[\"carrier-pigeon\"]}}")
+                .exchange()
+                .expectStatus().isBadRequest();
+
+        verify(tenantCredentialProfileService, never()).updateCatalog(any(), any());
+    }
+
+    /**
+     * ES-02: an explicitly empty set of modes for a declared type is a 400, parsed and
+     * rejected by the controller itself.
+     */
+    @Test
+    void updateCatalog_emptyModesForDeclaredType_returns400WithoutCallingService() {
+        when(accessTokenService.getAuthorizationContext(anyString()))
+                .thenReturn(Mono.just(admin()));
+
+        webTestClient.mutateWith(csrf())
+                .put()
+                .uri(CREDENTIAL_CATALOG_PATH)
+                .header("Authorization", "Bearer token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"enabledConfigurationIds\":[\"learcredential.employee.w3c.4\"],"
+                        + "\"deliveryModesByConfigurationId\":{\"learcredential.employee.w3c.4\":[]}}")
+                .exchange()
+                .expectStatus().isBadRequest();
+
+        verify(tenantCredentialProfileService, never()).updateCatalog(any(), any());
+    }
+
+    /**
+     * ES-03: modes declared for a type outside enabledConfigurationIds (or the global
+     * registry) are a 400, surfaced by the service -- unlike ES-01/02 this one needs the
+     * enabled-ids ⊆ registry / map ⊆ enabled-ids checks the service itself owns.
+     */
+    @Test
+    void updateCatalog_modesForNotEnabledType_returns400() {
+        when(accessTokenService.getAuthorizationContext(anyString()))
+                .thenReturn(Mono.just(admin()));
+        when(tenantCredentialProfileService.updateCatalog(any(), any()))
+                .thenReturn(Mono.error(new InvalidDeliveryConfigException(
+                        "Delivery modes declared for credential configuration id(s) not enabled in this request: [other.type]")));
+
+        webTestClient.mutateWith(csrf())
+                .put()
+                .uri(CREDENTIAL_CATALOG_PATH)
+                .header("Authorization", "Bearer token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"enabledConfigurationIds\":[\"learcredential.employee.w3c.4\"],"
+                        + "\"deliveryModesByConfigurationId\":{\"other.type\":[\"email\"]}}")
                 .exchange()
                 .expectStatus().isBadRequest();
     }
@@ -209,7 +329,7 @@ class CredentialCatalogControllerTest {
                 .exchange()
                 .expectStatus().isBadRequest();
 
-        verify(tenantCredentialProfileService, never()).updateCatalog(any());
+        verify(tenantCredentialProfileService, never()).updateCatalog(any(), any());
     }
 
     @Test
@@ -226,7 +346,7 @@ class CredentialCatalogControllerTest {
                 .exchange()
                 .expectStatus().isBadRequest();
 
-        verify(tenantCredentialProfileService, never()).updateCatalog(any());
+        verify(tenantCredentialProfileService, never()).updateCatalog(any(), any());
     }
 
     private static AuthorizationContext admin() {
