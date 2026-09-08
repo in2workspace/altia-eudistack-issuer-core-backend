@@ -60,7 +60,7 @@ public final class Constants {
     // GRANT TYPES
     public static final String GRANT_TYPE = "urn:ietf:params:oauth:grant-type:pre-authorized_code";
     public static final String REFRESH_TOKEN_GRANT_TYPE = "refresh_token";
-    public static final String PRE_AUTHORIZATION_CODE = "pre-authorization_code";
+    public static final String PRE_AUTHORIZED_CODE = "pre-authorized_code";
     public static final String AUTHORIZATION_CODE = "authorization_code";
 
     // HTTP
