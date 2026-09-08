@@ -124,7 +124,7 @@ public class SignDocServiceImpl implements SignDocService {
         SignedJWT signedJWT;
         try {
             signedJWT = SignedJWT.parse(signedDoc);
-        } catch (ParseException e) {
+        } catch (ParseException _) {
             throw new SignatureProcessingException("Signed document is not a well-formed JWS");
         }
 
@@ -146,7 +146,9 @@ public class SignDocServiceImpl implements SignDocService {
         List<String> expectedCertificates = certInfo.certificates();
         String expectedLeafBase64 = (expectedCertificates == null || expectedCertificates.isEmpty())
                 ? null : expectedCertificates.getFirst();
-        if (expectedLeafBase64 == null || !leaf.equals(X509CertUtils.parse(Base64.getDecoder().decode(expectedLeafBase64)))) {
+
+        if (expectedLeafBase64 == null
+                || !leaf.equals(X509CertUtils.parse(Base64.getDecoder().decode(expectedLeafBase64)))) {
             throw new SignatureProcessingException(
                     "Signed document's certificate does not match the credential's own certificate");
         }
@@ -154,10 +156,12 @@ public class SignDocServiceImpl implements SignDocService {
         try {
             JWSVerifier verifier = buildVerifier(header.getAlgorithm(), leaf);
             if (!signedJWT.verify(verifier)) {
-                throw new SignatureProcessingException("Signature verification failed against the certificate in x5c");
+                throw new SignatureProcessingException(
+                        "Signature verification failed against the certificate in x5c");
             }
-        } catch (JOSEException e) {
-            throw new SignatureProcessingException("Error verifying the signed document's signature");
+        } catch (JOSEException _) {
+            throw new SignatureProcessingException(
+                    "Error verifying the signed document's signature");
         }
     }
 
