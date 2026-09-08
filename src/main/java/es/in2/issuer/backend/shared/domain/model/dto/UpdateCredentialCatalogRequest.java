@@ -1,6 +1,9 @@
 package es.in2.issuer.backend.shared.domain.model.dto;
 
 import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 
 import java.util.Map;
 import java.util.Set;
@@ -19,10 +22,25 @@ import java.util.Set;
  * contract, AD-4): omitting it (or a {@code ccid} inside it) preserves that type's
  * currently-stored delivery modes rather than clearing them. Values are raw strings --
  * parsed into {@code DeliveryMode} at the controller boundary, not here.
+ *
+ * <p>Security review (F4): the map, its keys and its values are bounded -- an
+ * unconstrained map previously let an attacker-controlled key (a
+ * {@code credential_configuration_id} that is never validated against the registry before
+ * being echoed into an error message) or a {@code null} value reach a log line / RFC-9457
+ * {@code detail} unsanitized. The registry today holds ~7 profiles and a request declares
+ * at most 3 delivery modes (direct/email/ui); the bounds below are generous, not tight.
  */
 public record UpdateCredentialCatalogRequest(
         @NotEmpty(message = "enabledConfigurationIds must not be empty")
         Set<String> enabledConfigurationIds,
 
-        Map<String, Set<String>> deliveryModesByConfigurationId
+        @Size(max = 32, message = "deliveryModesByConfigurationId must declare at most 32 credential configuration ids")
+        Map<
+                @Pattern(regexp = "^[a-zA-Z0-9._-]{1,128}$",
+                        message = "credential_configuration_id key must be 1-128 characters, letters/digits/./_/- only")
+                String,
+                @NotNull(message = "delivery modes must not be null for a declared credential configuration id")
+                @Size(min = 1, max = 3, message = "delivery modes must declare between 1 and 3 values")
+                Set<@Size(max = 16, message = "delivery mode value too long") String>
+        > deliveryModesByConfigurationId
 ) {}

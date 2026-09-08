@@ -113,6 +113,13 @@ public class CredentialCatalogController {
     }
 
     private Set<DeliveryMode> parseModes(String credentialConfigurationId, Set<String> rawModes) {
+        // Defense in depth alongside UpdateCredentialCatalogRequest's @NotNull/@Size container-element
+        // constraints (F3, security review): a JSON-null value for a declared key must not reach
+        // String.join as an NPE -- it is the same class of input error as an empty set (ES-02).
+        if (rawModes == null || rawModes.isEmpty()) {
+            throw new InvalidDeliveryConfigException(
+                    "No delivery modes declared for credential configuration id '" + credentialConfigurationId + "'");
+        }
         try {
             return DeliveryMode.parse(String.join(",", rawModes));
         } catch (IllegalArgumentException e) {

@@ -306,6 +306,29 @@ class CredentialCatalogControllerTest {
     }
 
     /**
+     * F3 (security review): a JSON `null` value for a declared type must not reach
+     * String.join as an NPE -- caught by UpdateCredentialCatalogRequest's own bean
+     * validation (F4) before this even reaches the controller body.
+     */
+    @Test
+    void updateCatalog_nullModesForDeclaredType_returns400WithoutCallingService() {
+        when(accessTokenService.getAuthorizationContext(anyString()))
+                .thenReturn(Mono.just(admin()));
+
+        webTestClient.mutateWith(csrf())
+                .put()
+                .uri(CREDENTIAL_CATALOG_PATH)
+                .header("Authorization", "Bearer token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"enabledConfigurationIds\":[\"learcredential.employee.w3c.4\"],"
+                        + "\"deliveryModesByConfigurationId\":{\"learcredential.employee.w3c.4\":null}}")
+                .exchange()
+                .expectStatus().isBadRequest();
+
+        verify(tenantCredentialProfileService, never()).updateCatalog(any(), any());
+    }
+
+    /**
      * ES-03: modes declared for a type outside enabledConfigurationIds (or the global
      * registry) are a 400, surfaced by the service -- unlike ES-01/02 this one needs the
      * enabled-ids ⊆ registry / map ⊆ enabled-ids checks the service itself owns.
