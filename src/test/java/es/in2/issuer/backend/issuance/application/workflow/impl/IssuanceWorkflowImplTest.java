@@ -16,7 +16,7 @@ import es.in2.issuer.backend.issuance.domain.model.DeliveryTrace;
 import es.in2.issuer.backend.issuance.domain.model.dto.IssuanceRequest;
 import es.in2.issuer.backend.issuance.domain.model.dto.IssuanceResponse;
 import es.in2.issuer.backend.issuance.infrastructure.config.properties.IssuanceProperties;
-import es.in2.issuer.backend.shared.domain.service.TenantConfigService;
+import es.in2.issuer.backend.shared.domain.service.DeliveryEligibilityResolver;
 import es.in2.issuer.backend.shared.domain.model.dto.*;
 import es.in2.issuer.backend.shared.domain.model.dto.credential.profile.CredentialProfile;
 import es.in2.issuer.backend.shared.domain.model.entities.Issuance;
@@ -95,7 +95,7 @@ class IssuanceWorkflowImplTest {
     @Mock private GenericCredentialBuilder genericCredentialBuilder;
     @Mock private CredentialSignerWorkflow credentialSignerWorkflow;
     @Mock private StatusListWorkflow statusListWorkflow;
-    @Mock private TenantConfigService tenantConfigService;
+    @Mock private DeliveryEligibilityResolver deliveryEligibilityResolver;
     @Mock private SchemaDeliveryCeiling schemaDeliveryCeiling;
     @Mock private HolderDidFallbackAuditor holderDidFallbackAuditor;
 
@@ -108,12 +108,11 @@ class IssuanceWorkflowImplTest {
 
     @BeforeEach
     void setUpDeliveryEligibility() {
-        lenient().when(tenantConfigService.getStringOrDefault(anyString(), anyString()))
-                .thenAnswer(invocation -> Mono.just(invocation.getArgument(1, String.class)));
-        // Permissive ceiling by default so the pre-existing tests keep exercising what they were written
-        // for; the tests that care about the ceiling override this stub explicitly.
-        lenient().when(schemaDeliveryCeiling.resolveEligibleModes(anyString()))
-                .thenReturn(EnumSet.allOf(DeliveryMode.class));
+        // Permissive by default (equivalent to "no tenant configuration, ceiling wide open") so the
+        // pre-existing tests keep exercising what they were written for; tests that care about a
+        // narrower eligible set override this stub explicitly for their credential_configuration_id.
+        lenient().when(deliveryEligibilityResolver.resolveEligibleModes(anyString()))
+                .thenReturn(Mono.just(EnumSet.allOf(DeliveryMode.class)));
         // Identity by default (F2): bindHolderDid only matters to the tests asserting on
         // mandatee.id/cnf coherence for an AD-8 exempt type; everyone else just needs the dataSet
         // to survive the call unchanged.
@@ -544,8 +543,8 @@ class IssuanceWorkflowImplTest {
         when(credentialProfileRegistry.getByConfigurationId(EXEMPT_CONFIG_ID)).thenReturn(profile);
         when(payloadSchemaValidator.validate(EXEMPT_CONFIG_ID, payload)).thenReturn(Mono.empty());
         when(issuancePdpService.authorize(eq(EXEMPT_CONFIG_ID), eq(payload), anyString())).thenReturn(Mono.empty());
-        when(tenantConfigService.getStringOrDefault(eq("issuer.delivery.modes." + EXEMPT_CONFIG_ID), anyString()))
-                .thenReturn(Mono.just("direct,email"));
+        when(deliveryEligibilityResolver.resolveEligibleModes(EXEMPT_CONFIG_ID))
+                .thenReturn(Mono.just(DeliveryMode.parse("direct,email")));
         when(issuanceMetrics.startTimer()).thenReturn(Timer.start(new SimpleMeterRegistry()));
 
         StepVerifier.create(withTenant(workflow.issueCredential("p", request, "id-token", BEARER_TOKEN, BASE_URL, WALLET_URL)))
@@ -589,8 +588,8 @@ class IssuanceWorkflowImplTest {
         when(credentialProfileRegistry.getByConfigurationId(EXEMPT_CONFIG_ID)).thenReturn(profile);
         when(payloadSchemaValidator.validate(EXEMPT_CONFIG_ID, payload)).thenReturn(Mono.empty());
         when(issuancePdpService.authorize(eq(EXEMPT_CONFIG_ID), eq(payload), anyString())).thenReturn(Mono.empty());
-        when(tenantConfigService.getStringOrDefault(eq("issuer.delivery.modes." + EXEMPT_CONFIG_ID), anyString()))
-                .thenReturn(Mono.just("direct,email,ui"));
+        when(deliveryEligibilityResolver.resolveEligibleModes(EXEMPT_CONFIG_ID))
+                .thenReturn(Mono.just(DeliveryMode.parse("direct,email,ui")));
         when(genericCredentialBuilder.buildCredential(profile, payload)).thenReturn(Mono.just(buildResult));
         when(genericCredentialBuilder.bindIssuer(eq(profile), anyString(), anyString(), eq(EMAIL)))
                 .thenReturn(Mono.just("enriched-data-set"));
@@ -690,8 +689,8 @@ class IssuanceWorkflowImplTest {
         when(credentialProfileRegistry.getByConfigurationId(EXEMPT_CONFIG_ID)).thenReturn(profile);
         when(payloadSchemaValidator.validate(EXEMPT_CONFIG_ID, payload)).thenReturn(Mono.empty());
         when(issuancePdpService.authorize(eq(EXEMPT_CONFIG_ID), eq(payload), anyString())).thenReturn(Mono.empty());
-        when(tenantConfigService.getStringOrDefault(eq("issuer.delivery.modes." + EXEMPT_CONFIG_ID), anyString()))
-                .thenReturn(Mono.just("direct,email,ui"));
+        when(deliveryEligibilityResolver.resolveEligibleModes(EXEMPT_CONFIG_ID))
+                .thenReturn(Mono.just(DeliveryMode.parse("direct,email,ui")));
         when(issuanceMetrics.startTimer()).thenReturn(Timer.start(new SimpleMeterRegistry()));
 
         StepVerifier.create(withTenant(workflow.issueCredential("p", request, "id-token", BEARER_TOKEN, BASE_URL, WALLET_URL)))
@@ -718,8 +717,8 @@ class IssuanceWorkflowImplTest {
         when(credentialProfileRegistry.getByConfigurationId(EXEMPT_CONFIG_ID)).thenReturn(profile);
         when(payloadSchemaValidator.validate(EXEMPT_CONFIG_ID, payload)).thenReturn(Mono.empty());
         when(issuancePdpService.authorize(eq(EXEMPT_CONFIG_ID), eq(payload), anyString())).thenReturn(Mono.empty());
-        when(tenantConfigService.getStringOrDefault(eq("issuer.delivery.modes." + EXEMPT_CONFIG_ID), anyString()))
-                .thenReturn(Mono.just("direct,email,ui"));
+        when(deliveryEligibilityResolver.resolveEligibleModes(EXEMPT_CONFIG_ID))
+                .thenReturn(Mono.just(DeliveryMode.parse("direct,email,ui")));
         when(issuanceMetrics.startTimer()).thenReturn(Timer.start(new SimpleMeterRegistry()));
 
         StepVerifier.create(withTenant(workflow.issueCredential("p", request, "id-token", BEARER_TOKEN, BASE_URL, WALLET_URL)))
@@ -741,8 +740,8 @@ class IssuanceWorkflowImplTest {
         when(credentialProfileRegistry.getByConfigurationId(EXEMPT_CONFIG_ID)).thenReturn(profile);
         when(payloadSchemaValidator.validate(EXEMPT_CONFIG_ID, payload)).thenReturn(Mono.empty());
         when(issuancePdpService.authorize(eq(EXEMPT_CONFIG_ID), eq(payload), anyString())).thenReturn(Mono.empty());
-        when(tenantConfigService.getStringOrDefault(eq("issuer.delivery.modes." + EXEMPT_CONFIG_ID), anyString()))
-                .thenReturn(Mono.just("direct,email,ui"));
+        when(deliveryEligibilityResolver.resolveEligibleModes(EXEMPT_CONFIG_ID))
+                .thenReturn(Mono.just(DeliveryMode.parse("direct,email,ui")));
         when(issuanceMetrics.startTimer()).thenReturn(Timer.start(new SimpleMeterRegistry()));
 
         StepVerifier.create(withTenant(workflow.issueCredential("p", request, "id-token", BEARER_TOKEN, BASE_URL, WALLET_URL)))
@@ -827,8 +826,8 @@ class IssuanceWorkflowImplTest {
         when(credentialProfileRegistry.getByConfigurationId(EXEMPT_CONFIG_ID)).thenReturn(profile);
         when(payloadSchemaValidator.validate(EXEMPT_CONFIG_ID, payload)).thenReturn(Mono.empty());
         when(issuancePdpService.authorize(eq(EXEMPT_CONFIG_ID), eq(payload), anyString())).thenReturn(Mono.empty());
-        when(tenantConfigService.getStringOrDefault(eq("issuer.delivery.modes." + EXEMPT_CONFIG_ID), anyString()))
-                .thenReturn(Mono.just("direct,email,ui"));
+        when(deliveryEligibilityResolver.resolveEligibleModes(EXEMPT_CONFIG_ID))
+                .thenReturn(Mono.just(DeliveryMode.parse("direct,email,ui")));
         when(genericCredentialBuilder.buildCredential(profile, payload))
                 .thenReturn(Mono.just(buildResult(Instant.now().minusSeconds(100))));
         when(genericCredentialBuilder.bindIssuer(eq(profile), anyString(), anyString(), eq(EMAIL)))
@@ -868,8 +867,8 @@ class IssuanceWorkflowImplTest {
         when(credentialProfileRegistry.getByConfigurationId(EXEMPT_CONFIG_ID)).thenReturn(profile);
         when(payloadSchemaValidator.validate(EXEMPT_CONFIG_ID, payload)).thenReturn(Mono.empty());
         when(issuancePdpService.authorize(eq(EXEMPT_CONFIG_ID), eq(payload), anyString())).thenReturn(Mono.empty());
-        when(tenantConfigService.getStringOrDefault(eq("issuer.delivery.modes." + EXEMPT_CONFIG_ID), anyString()))
-                .thenReturn(Mono.just("direct,email,ui"));
+        when(deliveryEligibilityResolver.resolveEligibleModes(EXEMPT_CONFIG_ID))
+                .thenReturn(Mono.just(DeliveryMode.parse("direct,email,ui")));
         when(genericCredentialBuilder.buildCredential(profile, payload))
                 .thenReturn(Mono.just(buildResult(Instant.now().minusSeconds(100))));
         when(genericCredentialBuilder.bindIssuer(eq(profile), anyString(), anyString(), eq(EMAIL)))
@@ -899,8 +898,8 @@ class IssuanceWorkflowImplTest {
         when(credentialProfileRegistry.getByConfigurationId(EXEMPT_CONFIG_ID)).thenReturn(profile);
         when(payloadSchemaValidator.validate(EXEMPT_CONFIG_ID, payload)).thenReturn(Mono.empty());
         when(issuancePdpService.authorize(eq(EXEMPT_CONFIG_ID), eq(payload), anyString())).thenReturn(Mono.empty());
-        when(tenantConfigService.getStringOrDefault(eq("issuer.delivery.modes." + EXEMPT_CONFIG_ID), anyString()))
-                .thenReturn(Mono.just("direct,email,ui"));
+        when(deliveryEligibilityResolver.resolveEligibleModes(EXEMPT_CONFIG_ID))
+                .thenReturn(Mono.just(DeliveryMode.parse("direct,email,ui")));
         when(genericCredentialBuilder.buildCredential(profile, payload))
                 .thenReturn(Mono.just(buildResult(Instant.now().minusSeconds(100))));
         when(genericCredentialBuilder.bindIssuer(eq(profile), anyString(), anyString(), eq(EMAIL)))
@@ -930,7 +929,7 @@ class IssuanceWorkflowImplTest {
         when(credentialProfileRegistry.getByConfigurationId(CONFIG_ID)).thenReturn(profile);
         when(payloadSchemaValidator.validate(CONFIG_ID, payload)).thenReturn(Mono.empty());
         when(issuancePdpService.authorize(eq(CONFIG_ID), eq(payload), anyString())).thenReturn(Mono.empty());
-        when(tenantConfigService.getStringOrDefault(eq("issuer.delivery.modes." + CONFIG_ID), anyString()))
+        when(deliveryEligibilityResolver.resolveEligibleModes(CONFIG_ID))
                 .thenReturn(Mono.error(new IllegalStateException("config store down")));
         when(issuanceMetrics.startTimer()).thenReturn(Timer.start(new SimpleMeterRegistry()));
 
@@ -986,8 +985,8 @@ class IssuanceWorkflowImplTest {
         when(credentialProfileRegistry.getByConfigurationId(CONFIG_ID)).thenReturn(profileWithoutCnf());
         when(payloadSchemaValidator.validate(CONFIG_ID, payload)).thenReturn(Mono.empty());
         when(issuancePdpService.authorize(eq(CONFIG_ID), eq(payload), anyString())).thenReturn(Mono.empty());
-        when(tenantConfigService.getStringOrDefault(eq("issuer.delivery.modes." + CONFIG_ID), anyString()))
-                .thenReturn(Mono.just("email,ui"));
+        when(deliveryEligibilityResolver.resolveEligibleModes(CONFIG_ID))
+                .thenReturn(Mono.just(DeliveryMode.parse("email,ui")));
         when(issuanceMetrics.startTimer()).thenReturn(Timer.start(new SimpleMeterRegistry()));
 
         StepVerifier.create(withTenant(workflow.issueCredential("p", request, "id-token", BEARER_TOKEN, BASE_URL, WALLET_URL)))
@@ -1013,12 +1012,10 @@ class IssuanceWorkflowImplTest {
         when(payloadSchemaValidator.validate(CONFIG_ID, payload)).thenReturn(Mono.empty());
         when(issuancePdpService.authorize(eq(CONFIG_ID), eq(payload), anyString())).thenReturn(Mono.empty());
         // Ceiling narrowed to wallet-only modes (a bound type), and a stale tenant configuration
-        // listing only "direct" -- it shares nothing with the ceiling, so the effective eligible set
-        // that ends up in the error message is empty.
-        when(schemaDeliveryCeiling.resolveEligibleModes(CONFIG_ID))
-                .thenReturn(EnumSet.of(DeliveryMode.EMAIL, DeliveryMode.UI));
-        when(tenantConfigService.getStringOrDefault(eq("issuer.delivery.modes." + CONFIG_ID), anyString()))
-                .thenReturn(Mono.just("direct"));
+        // listing only "direct" -- it shares nothing with the ceiling, so the resolver (which applies
+        // the intersection itself, EC-09) reports the effective eligible set as empty.
+        when(deliveryEligibilityResolver.resolveEligibleModes(CONFIG_ID))
+                .thenReturn(Mono.just(Set.of()));
         when(issuanceMetrics.startTimer()).thenReturn(Timer.start(new SimpleMeterRegistry()));
 
         StepVerifier.create(withTenant(workflow.issueCredential("p", request, "id-token", BEARER_TOKEN, BASE_URL, WALLET_URL)))
