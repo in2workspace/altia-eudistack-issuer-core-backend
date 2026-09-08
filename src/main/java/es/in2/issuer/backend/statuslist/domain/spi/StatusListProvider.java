@@ -28,6 +28,15 @@ public interface StatusListProvider {
                                         String issuanceId, String token, String publicIssuerBaseUrl);
 
     /**
+     * M1: releases an entry previously reserved by {@link #allocateEntry} for an issuance that never
+     * completed (e.g. signing or persistence failed after the entry was allocated). The entry was
+     * never referenced by any actually-issued credential, so it is safe to free unconditionally --
+     * without this, a failed direct issuance permanently wastes one status list index. A no-op if no
+     * entry was ever allocated for this {@code issuanceId} (nothing to release).
+     */
+    Mono<Void> releaseEntry(String issuanceId);
+
+    /**
      * Returns the signed status list credential (JWT) for the given list.
      *
      * @param expectedFormat serialization the caller (i.e. the endpoint being hit) is going to

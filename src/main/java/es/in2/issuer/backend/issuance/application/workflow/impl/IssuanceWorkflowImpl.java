@@ -531,6 +531,12 @@ public class IssuanceWorkflowImpl implements IssuanceWorkflow {
                                                                     .signedCredential(signedCredential)
                                                                     .build());
                                                 })
+                                                // M1: the status list entry above was already reserved -- if
+                                                // signing or persistence fails after that, it is never
+                                                // referenced by anything again and stays wasted forever unless
+                                                // released here. Best-effort: a release failure must not mask
+                                                // the original failure, only be logged.
+                                                .onErrorResume(error -> releaseStatusListEntryBestEffort(processId, issuanceId, error))
                                 )
                 );
     }
@@ -601,6 +607,26 @@ public class IssuanceWorkflowImpl implements IssuanceWorkflow {
                 .credentialOfferRefreshToken(UUID.randomUUID().toString())
                 .holderCnf(HolderCnfJson.write(cnf))
                 .build();
+    }
+
+    /**
+     * M1: releases the status list entry {@code performDirectIssuance} already reserved for
+     * {@code issuanceId}, then re-raises {@code original} unchanged. A release failure is logged and
+     * swallowed rather than replacing {@code original} -- the caller sees the real failure (signing or
+     * persistence) either way, and losing the release is a smaller, already-tolerated problem (the
+     * exact one this method exists to shrink the odds of, not eliminate entirely).
+     */
+    private <T> Mono<T> releaseStatusListEntryBestEffort(String processId, UUID issuanceId, Throwable original) {
+        return statusListWorkflow.releaseEntry(issuanceId.toString())
+                .doOnSuccess(v -> log.debug(
+                        "ProcessId: {} - Released orphaned status list entry for issuanceId={} after {}",
+                        processId, issuanceId, original.getClass().getSimpleName()))
+                .onErrorResume(releaseError -> {
+                    log.warn("ProcessId: {} - Failed to release status list entry for issuanceId={} (leaked): {}",
+                            processId, issuanceId, releaseError.toString());
+                    return Mono.empty();
+                })
+                .then(Mono.<T>error(original));
     }
 
     private Issuance buildDirectIssuanceEntity(UUID issuanceId, String credentialType, String credentialFormat,

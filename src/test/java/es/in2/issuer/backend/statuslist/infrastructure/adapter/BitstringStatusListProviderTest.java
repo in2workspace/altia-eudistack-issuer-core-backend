@@ -1451,6 +1451,37 @@ class BitstringStatusListProviderTest {
         verify(statusListRepository).deleteById(TEST_LIST_ID);
     }
 
+    @Test
+    void releaseEntry_shouldDeleteTheIndexRowByIssuanceId() {
+        UUID procedureUuid = UUID.fromString(TEST_ISSUANCE_ID);
+
+        when(statusListIndexRepository.deleteByIssuanceId(procedureUuid)).thenReturn(Mono.empty());
+
+        StepVerifier.create(bitstringStatusListProvider.releaseEntry(TEST_ISSUANCE_ID)).verifyComplete();
+
+        verify(statusListIndexRepository).deleteByIssuanceId(procedureUuid);
+    }
+
+    @Test
+    void releaseEntry_shouldPropagateRepositoryFailure() {
+        UUID procedureUuid = UUID.fromString(TEST_ISSUANCE_ID);
+        RuntimeException dbError = new RuntimeException("connection reset");
+
+        when(statusListIndexRepository.deleteByIssuanceId(procedureUuid)).thenReturn(Mono.error(dbError));
+
+        StepVerifier.create(bitstringStatusListProvider.releaseEntry(TEST_ISSUANCE_ID))
+                .expectErrorMatches(e -> e instanceof RuntimeException && "connection reset".equals(e.getMessage()))
+                .verify();
+    }
+
+    @Test
+    void releaseEntry_shouldThrow_whenIssuanceIdIsNull() {
+        assertThatThrownBy(() -> monoFromCall(() -> bitstringStatusListProvider.releaseEntry(null)).block())
+                .isInstanceOf(RuntimeException.class);
+
+        verifyNoInteractions(statusListIndexRepository);
+    }
+
     private static <T> Mono<T> monoFromCall(Supplier<Mono<T>> call) {
         try {
             return call.get();

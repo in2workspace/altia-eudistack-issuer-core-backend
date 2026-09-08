@@ -122,6 +122,20 @@ public class BitstringStatusListProvider implements StatusListProvider {
     }
 
     @Override
+    @Observed(name = "statuslist.provider.release-entry", contextualName = "statuslist-provider-release-entry")
+    public Mono<Void> releaseEntry(String issuanceId) {
+        requireNonNullParam(issuanceId, "issuanceId");
+
+        log.debug("method=releaseEntry step=START issuanceId={}", issuanceId);
+
+        return statusListIndexRepository.deleteByIssuanceId(UUID.fromString(issuanceId))
+                .doOnSuccess(v -> log.debug("method=releaseEntry step=END issuanceId={}", issuanceId))
+                .doOnError(e -> log.warn(
+                        "method=releaseEntry step=ERROR issuanceId={} error={}", issuanceId, e.toString()
+                ));
+    }
+
+    @Override
     @Observed(name = "statuslist.provider.revoke", contextualName = "statuslist-provider-revoke")
     public Mono<Void> revoke(String issuanceId, String token, String publicIssuerBaseUrl) {
         requireNonNullParam(issuanceId, "issuanceId");
