@@ -26,9 +26,6 @@ public class EndpointsConstants {
     // Authenticated user info (role + org for the current tenant)
     public static final String ME_PATH = "/api/v1/me";
 
-    // Tenant admin management of eligible delivery modes per credential type (EUD-169)
-    public static final String DELIVERY_CONFIG_PATH = "/api/v1/backoffice/delivery-config/{credentialConfigurationId}";
-
     // Tenant credential catalog admin (EUD-72, US-02). Tenant admin GET/PUT of the
     // per-tenant enabled credential configuration ids.
     public static final String CREDENTIAL_CATALOG_PATH = "/admin/v1/credential-catalog";

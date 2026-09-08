@@ -1005,26 +1005,6 @@ class SharedExceptionHandlerTest {
         verify(errors).handleWith(ex, request, type, title, st, fallback);
     }
 
-    // -------------------- handleDeliveryConfigProfileNotFoundException --------------------
-
-    @Test
-    void handleDeliveryConfigProfileNotFoundException() {
-        var ex = new DeliveryConfigProfileNotFoundException("Unknown credential_configuration_id: xyz");
-        var type = GlobalErrorTypes.DELIVERY_CONFIG_PROFILE_NOT_FOUND.getCode();
-        var title = "Delivery config profile not found";
-        var st = HttpStatus.NOT_FOUND;
-        var fallback = "The given credential_configuration_id is unknown or not enabled for this tenant";
-        var expected = new GlobalErrorMessage(type, title, st.value(), "Unknown credential_configuration_id: xyz", UUID.randomUUID().toString());
-
-        when(errors.handleWith(ex, request, type, title, st, fallback)).thenReturn(Mono.just(expected));
-
-        StepVerifier.create(handler.handleDeliveryConfigProfileNotFoundException(ex, request))
-                .assertNext(gem -> assertGem(gem, type, title, st, "Unknown credential_configuration_id: xyz"))
-                .verifyComplete();
-
-        verify(errors).handleWith(ex, request, type, title, st, fallback);
-    }
-
     // -------------------- handleDeliveryModeNotEligibleException (AC-05, EUD-168) --------------------
 
     @Test
