@@ -362,6 +362,77 @@ class IssuanceControllerTest {
         org.mockito.Mockito.verifyNoInteractions(issuanceWorkflow);
     }
 
+    /**
+     * TDG-16: {@code email} only had {@code @NotBlank} before this fix -- a syntactically invalid
+     * address reached the delivery workflow unrejected. Now bound by Bean Validation before the
+     * workflow ever runs, same pattern as {@link #createIssuance_DeliveryContainsControlCharacters_Returns400WithoutInvokingWorkflow()}.
+     */
+    @Test
+    void createIssuance_MalformedEmail_Returns400WithoutInvokingWorkflow() throws JsonProcessingException {
+        IssuanceRequest request = IssuanceRequest.builder()
+                .credentialConfigurationId("test-schema")
+                .payload(objectMapper.createObjectNode().put("key", "value"))
+                .email("not-an-email")
+                .delivery("email")
+                .build();
+
+        webTestClient.mutateWith(csrf())
+                .post()
+                .uri(ISSUANCES_PATH)
+                .header("Authorization", BEARER_TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(objectMapper.writeValueAsString(request))
+                .exchange()
+                .expectStatus().isBadRequest();
+
+        org.mockito.Mockito.verifyNoInteractions(issuanceWorkflow);
+    }
+
+    /** TDG-16: {@code credential_configuration_id} closed vocabulary bound (letters/digits/dots/hyphens, max 100). */
+    @Test
+    void createIssuance_CredentialConfigurationIdContainsControlCharacters_Returns400WithoutInvokingWorkflow() throws JsonProcessingException {
+        IssuanceRequest request = IssuanceRequest.builder()
+                .credentialConfigurationId("test-schema\r\nX-Forged-Header: 1")
+                .payload(objectMapper.createObjectNode().put("key", "value"))
+                .email("test@example.com")
+                .delivery("email")
+                .build();
+
+        webTestClient.mutateWith(csrf())
+                .post()
+                .uri(ISSUANCES_PATH)
+                .header("Authorization", BEARER_TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(objectMapper.writeValueAsString(request))
+                .exchange()
+                .expectStatus().isBadRequest();
+
+        org.mockito.Mockito.verifyNoInteractions(issuanceWorkflow);
+    }
+
+    /** TDG-16: {@code grant_type} closed vocabulary bound (letters/digits/colon/underscore/hyphen, max 64). */
+    @Test
+    void createIssuance_GrantTypeContainsControlCharacters_Returns400WithoutInvokingWorkflow() throws JsonProcessingException {
+        IssuanceRequest request = IssuanceRequest.builder()
+                .credentialConfigurationId("test-schema")
+                .payload(objectMapper.createObjectNode().put("key", "value"))
+                .email("test@example.com")
+                .delivery("email")
+                .grantType("authorization_code\r\nX-Forged-Header: 1")
+                .build();
+
+        webTestClient.mutateWith(csrf())
+                .post()
+                .uri(ISSUANCES_PATH)
+                .header("Authorization", BEARER_TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(objectMapper.writeValueAsString(request))
+                .exchange()
+                .expectStatus().isBadRequest();
+
+        org.mockito.Mockito.verifyNoInteractions(issuanceWorkflow);
+    }
+
     @Test
     void createIssuance_InvalidDeliveryMode_Returns400() throws JsonProcessingException {
         IssuanceRequest request = buildIssuanceRequest();

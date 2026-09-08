@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`credential_configuration_id`, `email` and `grant_type` bounded at the `IssuanceRequest` DTO boundary (tech-debt TDG-16).** All three only had `@NotBlank` (or nothing, for `grant_type`) — a malformed email or a CRLF/control-character payload in any of the three reached the delivery workflow unrejected. `credential_configuration_id` and `grant_type` get `@Size`/`@Pattern` (closed vocabularies, same style as `delivery`'s existing TD-06 fix); `email` gets `@Email` + `@Size(max=254)` (RFC 5321). `holder_key` was already bounded downstream (`HolderKey.MAX_JWK_NODE_BYTES`, 8 KB, checked before Nimbus parses the JWK) — no change needed there; `payload` remains free-form JSON, protected only indirectly by the 256 KB codec limit, which is accepted as unavoidable for arbitrary credential-subject data. New `IssuanceControllerTest` cases for each of the three fields.
+
 ## [3.8.0] - 2026-09-07
 
 ### Fixed
