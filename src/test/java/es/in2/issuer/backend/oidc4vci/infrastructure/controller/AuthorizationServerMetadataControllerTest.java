@@ -11,11 +11,11 @@ import es.in2.issuer.backend.shared.infrastructure.controller.error.ErrorRespons
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.reactive.WebFluxTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.ReactiveAuthenticationManager;
 import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import reactor.core.publisher.Mono;
 
@@ -25,32 +25,32 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
 @WithMockUser
-@MockBean(ReactiveAuthenticationManager.class)
+@MockitoBean(types = ReactiveAuthenticationManager.class)
 @WebFluxTest(AuthorizationServerMetadataController.class)
 class AuthorizationServerMetadataControllerTest {
 
     @Autowired
     private WebTestClient webTestClient;
 
-    @MockBean
+    @MockitoBean
     ErrorResponseFactory errorResponseFactory;
 
-    @MockBean
+    @MockitoBean
     private NonceService nonceService;
 
-    @MockBean
+    @MockitoBean
     private GetAuthorizationServerMetadataWorkflow getAuthorizationServerMetadataWorkflow;
 
-    @MockBean
+    @MockitoBean
     private IssuanceMetrics issuanceMetrics;
 
-    @MockBean
+    @MockitoBean
     private TenantRegistryService tenantRegistryService;
 
-    @MockBean
+    @MockitoBean
     private UrlResolver urlResolver;
 
-    @MockBean
+    @MockitoBean
     private AccessTokenService accessTokenService;
 
     @Test
