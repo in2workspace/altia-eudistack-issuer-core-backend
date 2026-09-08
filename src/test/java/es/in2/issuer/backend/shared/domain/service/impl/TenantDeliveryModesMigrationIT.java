@@ -1,5 +1,6 @@
 package es.in2.issuer.backend.shared.domain.service.impl;
 
+import es.in2.issuer.backend.shared.domain.model.dto.CredentialCatalogEntryDto;
 import es.in2.issuer.backend.shared.domain.model.entities.TenantCredentialProfile;
 import es.in2.issuer.backend.shared.domain.model.enums.DeliveryMode;
 import es.in2.issuer.backend.shared.domain.service.TenantCredentialProfileService;
@@ -80,6 +81,36 @@ class TenantDeliveryModesMigrationIT extends PostgresIntegrationBase {
         Set<DeliveryMode> configured = service.findConfiguredDeliveryModes(configId)
                 .contextWrite(ctx(tenant)).block();
         assertThat(configured).containsExactlyInAnyOrder(DeliveryMode.EMAIL, DeliveryMode.UI);
+    }
+
+    /**
+     * F5 (security review): the migration guard validates only the CSV shape and that the
+     * catalog isn't empty -- not the schema ceiling. A legacy value above the ceiling for a
+     * bound type (the single fixture profile here requires holder binding, so its ceiling is
+     * {@code {email, ui}}) passes the guard and is backfilled verbatim. This is not
+     * exploitable: the runtime intersection (getCatalog(), DeliveryEligibilityResolver,
+     * IssuanceWorkflowImpl) always re-applies the live ceiling, so the out-of-ceiling value
+     * is stored but never honoured or shown as eligible.
+     */
+    @Test
+    void migration_backfillsOutOfCeilingLegacyValue_butResolverIntersectsItAway() {
+        String tenant = "migration-out-of-ceiling";
+        String configId = configId();
+        createSchemaAndMigrateTo(tenant, "12");
+        seedEnabledProfile(tenant, configId);
+        seedLegacyDeliveryModes(tenant, configId, "direct,email");
+
+        migrateFully(tenant);
+
+        List<TenantCredentialProfile> rows = repository.findAllByEnabledTrue()
+                .collectList().contextWrite(ctx(tenant)).block();
+        assertThat(rows).extracting(TenantCredentialProfile::deliveryModes).containsExactly("direct,email");
+
+        List<CredentialCatalogEntryDto> catalog = service.getCatalog().contextWrite(ctx(tenant)).block();
+        CredentialCatalogEntryDto entry = catalog.stream()
+                .filter(e -> e.credentialConfigurationId().equals(configId))
+                .findFirst().orElseThrow();
+        assertThat(entry.deliveryModes()).containsExactly("email");
     }
 
     /**

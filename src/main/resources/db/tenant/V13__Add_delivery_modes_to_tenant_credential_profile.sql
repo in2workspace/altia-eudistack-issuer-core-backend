@@ -41,6 +41,26 @@ UPDATE tenant_credential_profile p
  WHERE c.config_key = 'issuer.delivery.modes.' || p.credential_configuration_id
    AND p.delivery_modes IS NULL;
 
+-- 3b) EC-07 "queda registrado para poder auditarlo": la fila de tenant_config no se
+--     borra (red de seguridad del rollback), pero además se deja constancia explícita
+--     en el log de despliegue de qué claves no aterrizaron por no tener fila habilitada.
+DO $$
+DECLARE discarded text;
+BEGIN
+    SELECT string_agg(c.config_key, ', ') INTO discarded
+      FROM tenant_config c
+     WHERE c.config_key LIKE 'issuer.delivery.modes.%'
+       AND NOT EXISTS (
+           SELECT 1 FROM tenant_credential_profile p
+            WHERE p.credential_configuration_id = substring(c.config_key FROM length('issuer.delivery.modes.') + 1)
+       );
+    IF discarded IS NOT NULL THEN
+        RAISE NOTICE
+          'EUD-169: discarded legacy delivery-mode key(s) for not-enabled credential_configuration_id(s) in schema %: %',
+          current_schema(), discarded;
+    END IF;
+END $$;
+
 -- 4) Invariante de forma a nivel de datos, tras el backfill
 DO $$
 BEGIN
