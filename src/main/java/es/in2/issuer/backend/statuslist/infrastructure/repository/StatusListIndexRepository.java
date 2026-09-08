@@ -10,6 +10,8 @@ public interface StatusListIndexRepository extends ReactiveCrudRepository<Status
     Mono<StatusListIndex> findByIssuanceId(UUID issuanceId);
 
     Mono<Long> countByStatusListId(Long statusListId);
+
+    Mono<Void> deleteByIssuanceId(UUID issuanceId);
 }
 
 

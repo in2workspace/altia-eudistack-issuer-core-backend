@@ -1,4 +1,4 @@
-package es.in2.issuer.backend.issuance.domain.exception;
+package es.in2.issuer.backend.shared.domain.exception;
 
 public class DeliveryModeNotEligibleException extends RuntimeException {
     public DeliveryModeNotEligibleException(String message) {

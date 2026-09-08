@@ -112,6 +112,39 @@ class StatusListWorkflowTest {
     }
 
     @Test
+    void releaseEntry_whenSuccess_completesAndCallsProvider() {
+        String issuanceId = "issuance-123";
+
+        when(statusListProvider.releaseEntry(issuanceId)).thenReturn(Mono.empty());
+
+        StepVerifier.create(workflow.releaseEntry(issuanceId)).verifyComplete();
+
+        verify(statusListProvider).releaseEntry(issuanceId);
+        verifyNoMoreInteractions(statusListProvider);
+    }
+
+    @Test
+    void releaseEntry_whenProviderErrors_propagatesErrorAndCallsProvider() {
+        String issuanceId = "issuance-123";
+        RuntimeException ex = new RuntimeException("db down");
+
+        when(statusListProvider.releaseEntry(issuanceId)).thenReturn(Mono.error(ex));
+
+        StepVerifier.create(workflow.releaseEntry(issuanceId))
+                .expectErrorMatches(e -> e instanceof RuntimeException && "db down".equals(e.getMessage()))
+                .verify();
+
+        verify(statusListProvider).releaseEntry(issuanceId);
+    }
+
+    @Test
+    void releaseEntry_whenIssuanceIdIsNull_throwsAndDoesNotCallProvider() {
+        assertThrows(RuntimeException.class, () -> workflow.releaseEntry(null));
+
+        verifyNoInteractions(statusListProvider);
+    }
+
+    @Test
     void getSignedStatusListCredential_whenSuccess_returnsCredentialAndCallsProvider() {
         Long listId = 10L;
         String signed = "signed-credential";

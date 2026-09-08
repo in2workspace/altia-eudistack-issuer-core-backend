@@ -7,10 +7,13 @@ import es.in2.issuer.backend.shared.domain.model.dto.credential.profile.Credenti
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
+import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.core.io.support.ResourcePatternResolver;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -165,6 +168,10 @@ class CredentialProfileRegistryTest {
                   },
                   "validity_days": 365,
                   "issuer_type": "DETAILED",
+                  "cryptographic_binding_methods_supported": ["did:key"],
+                  "proof_types_supported": {
+                    "jwt": {"proof_signing_alg_values_supported": ["ES256"]}
+                  },
                   "cnf_required": true
                 }
                 """;
@@ -249,6 +256,10 @@ class CredentialProfileRegistryTest {
                   },
                   "validity_days": 365,
                   "issuer_type": "DETAILED",
+                  "cryptographic_binding_methods_supported": ["did:key"],
+                  "proof_types_supported": {
+                    "jwt": {"proof_signing_alg_values_supported": ["ES256"]}
+                  },
                   "cnf_required": true
                 }
                 """;
@@ -311,8 +322,9 @@ class CredentialProfileRegistryTest {
         ResourcePatternResolver resolver = mockResolver(validEmployeeProfile());
 
         CredentialProfileRegistry registry = new CredentialProfileRegistry(OBJECT_MAPPER, resolver, "classpath:credentials/profiles");
+        Map<String, CredentialProfile> allProfiles = registry.getAllProfiles();
 
-        assertThatThrownBy(() -> registry.getAllProfiles().put("key", null))
+        assertThatThrownBy(() -> allProfiles.put("key", null))
                 .isInstanceOf(UnsupportedOperationException.class);
     }
 
@@ -334,6 +346,10 @@ class CredentialProfileRegistryTest {
                 {
                   "credential_configuration_id": "learcredential.employee.w3c.4",
                   "validity_days": 365,
+                  "cryptographic_binding_methods_supported": ["did:key"],
+                  "proof_types_supported": {
+                    "jwt": {"proof_signing_alg_values_supported": ["ES256"]}
+                  },
                   "cnf_required": true,
                   "scope": "lear_credential_employee"
                 }
@@ -388,6 +404,10 @@ class CredentialProfileRegistryTest {
                   },
                   "validity_days": 365,
                   "issuer_type": "DETAILED",
+                  "cryptographic_binding_methods_supported": ["did:key"],
+                  "proof_types_supported": {
+                    "jwt": {"proof_signing_alg_values_supported": ["ES256"]}
+                  },
                   "cnf_required": true
                 }
                 """;
@@ -410,6 +430,10 @@ class CredentialProfileRegistryTest {
                   },
                   "validity_days": 365,
                   "issuer_type": "DETAILED",
+                  "cryptographic_binding_methods_supported": ["did:key"],
+                  "proof_types_supported": {
+                    "jwt": {"proof_signing_alg_values_supported": ["ES256"]}
+                  },
                   "cnf_required": true
                 }
                 """;
@@ -455,6 +479,10 @@ class CredentialProfileRegistryTest {
                   },
                   "validity_days": 365,
                   "issuer_type": "DETAILED",
+                  "cryptographic_binding_methods_supported": ["did:key"],
+                  "proof_types_supported": {
+                    "jwt": {"proof_signing_alg_values_supported": ["ES256"]}
+                  },
                   "cnf_required": true,
                   "subject_extraction": {
                     "strategy": "field",
@@ -483,6 +511,10 @@ class CredentialProfileRegistryTest {
                   },
                   "validity_days": 365,
                   "issuer_type": "DETAILED",
+                  "cryptographic_binding_methods_supported": ["did:key"],
+                  "proof_types_supported": {
+                    "jwt": {"proof_signing_alg_values_supported": ["ES256"]}
+                  },
                   "cnf_required": true,
                   "policy_extraction": {
                     "powers_path": "credentialSubject.mandate.power",
@@ -549,5 +581,119 @@ class CredentialProfileRegistryTest {
                 return filename;
             }
         };
+    }
+
+    // --- EUD-168: fail-fast on incoherent profiles (AC-08) and the AD-8 exemption (AC-14) ---
+
+    private static String profileJson(String configId, String bindingFields, boolean cnfRequired) {
+        return """
+                {
+                  "credential_configuration_id": "%s",
+                  "credential_format": "jwt_vc_json",
+                  "credential_definition": {"type": ["VerifiableCredential", "%s"]},
+                  %s
+                  "validity_days": 365,
+                  "issuer_type": "DETAILED",
+                  "cnf_required": %s
+                }
+                """.formatted(configId, configId, bindingFields, cnfRequired);
+    }
+
+    private static final String BOTH_BINDING_FIELDS = """
+              "cryptographic_binding_methods_supported": ["did:key"],
+                  "proof_types_supported": {"jwt": {"proof_signing_alg_values_supported": ["ES256"]}},
+            """;
+
+    private CredentialProfileRegistry load(String filename, String json) throws java.io.IOException {
+        return new CredentialProfileRegistry(
+                OBJECT_MAPPER, mockResolver(namedResource(filename, json)), "classpath:credentials/profiles");
+    }
+
+    @Test
+    void startupShouldFailWhenProfileDeclaresBindingMethodsWithoutProofTypes() {
+        String json = profileJson("some.profile.1",
+                "\"cryptographic_binding_methods_supported\": [\"did:key\"],", false);
+
+        assertThatThrownBy(() -> load("incoherent.json", json))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("some.profile.1")
+                .hasMessageContaining("cryptographic_binding_methods_supported");
+    }
+
+    @Test
+    void startupShouldFailWhenNonExemptProfileDeclaresCnfRequiredWithoutProofTypes() {
+        String json = profileJson("some.profile.2", "", true);
+
+        assertThatThrownBy(() -> load("incoherent-cnf.json", json))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("some.profile.2")
+                .hasMessageContaining("cnf_required");
+    }
+
+    @Test
+    void startupShouldSucceedForTheAd8ExemptMachineProfiles() throws java.io.IOException {
+        for (String configId : new String[]{"learcredential.machine.sd.1", "learcredential.machine.w3c.3"}) {
+            CredentialProfileRegistry registry = load(configId + ".json", profileJson(configId, "", true));
+            CredentialProfile profile = registry.getByConfigurationId(configId);
+            assertThat(profile).isNotNull();
+            assertThat(profile.cnfRequired()).isTrue();
+            // Unbound by ADR-110 despite carrying cnf_required: that is what keeps direct delivery open.
+            assertThat(profile.requiresHolderBinding()).isFalse();
+        }
+    }
+
+    @Test
+    void startupShouldSucceedForACoherentBoundProfile() throws java.io.IOException {
+        CredentialProfileRegistry registry = load("bound.json",
+                profileJson("learcredential.employee.w3c.4", BOTH_BINDING_FIELDS, true));
+
+        CredentialProfile profile = registry.getByConfigurationId("learcredential.employee.w3c.4");
+        assertThat(profile).isNotNull();
+        assertThat(profile.requiresHolderBinding()).isTrue();
+    }
+
+    /**
+     * TD-07 / EC-07: the other tests in this file load handcrafted fixtures through a mocked
+     * {@link ResourcePatternResolver}. This one instead points a real
+     * {@link PathMatchingResourcePatternResolver} at the actual vendored copy
+     * ({@code dev-tools/credentials/profiles}, not the single fixture on the test classpath) to prove
+     * the 13 real profiles -- 7 current plus 6 under {@code legacy/} -- load without violating
+     * {@code CredentialProfileBindingInvariant}, exactly as they must at container startup.
+     */
+    @Test
+    void shouldLoadTheThirteenRealVendoredProfilesWithoutViolatingTheInvariant() {
+        ResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
+
+        CredentialProfileRegistry registry = new CredentialProfileRegistry(
+                OBJECT_MAPPER, resolver, "file:dev-tools/credentials/profiles");
+
+        Set<String> currentConfigIds = Set.of(
+                "doctorid.sd.1",
+                "eu.europa.ec.eudi.pid.1",
+                "gx.labelcredential.w3c.2",
+                "learcredential.employee.sd.1",
+                "learcredential.employee.w3c.4",
+                "learcredential.machine.sd.1",
+                "learcredential.machine.w3c.3");
+        Set<String> legacyConfigIds = Set.of(
+                "gx.labelcredential.w3c.1",
+                "learcredential.employee.w3c.1",
+                "learcredential.employee.w3c.2",
+                "learcredential.employee.w3c.3",
+                "learcredential.machine.w3c.1",
+                "learcredential.machine.w3c.2");
+
+        assertThat(registry.getAllProfiles()).hasSize(currentConfigIds.size() + legacyConfigIds.size());
+
+        for (String configId : currentConfigIds) {
+            assertThat(registry.getByConfigurationId(configId))
+                    .as("current profile '%s' should have loaded", configId)
+                    .isNotNull();
+        }
+        for (String configId : legacyConfigIds) {
+            assertThat(registry.getByConfigurationId(configId))
+                    .as("legacy profile '%s' should have loaded", configId)
+                    .isNotNull();
+        }
     }
 }

@@ -137,6 +137,23 @@ public record CredentialProfile(
     ) {}
 
     /**
+     * {@code true} when this credential type is cryptographically bound to a holder key.
+     *
+     * <p>{@code proof_types_supported} is the single signal behind that question (ADR-110): it is the
+     * field obliging the wallet to send a signed key proof, and the key the issuer builds {@code cnf}
+     * from comes out of that proof. Absent, there is no key to bind -- and the type is therefore
+     * eligible for direct delivery, which has neither wallet nor proof.
+     *
+     * <p>Read this rather than {@code cryptographic_binding_methods_supported} (which describes how key
+     * material is represented, not whether it is required) or {@code cnfRequired} (a write switch
+     * subordinate to this signal). Keeping the null/empty check here means the three call sites that
+     * used to answer it three different ways now cannot disagree.
+     */
+    public boolean requiresHolderBinding() {
+        return proofTypesSupported != null && !proofTypesSupported.isEmpty();
+    }
+
+    /**
      * Returns the credential type name (e.g., "learcredential.employee.w3c.4").
      * Derived from the second element in credential_definition.type,
      * or the first element if only one type is defined.

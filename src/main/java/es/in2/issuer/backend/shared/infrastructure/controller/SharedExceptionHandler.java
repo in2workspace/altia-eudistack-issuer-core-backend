@@ -744,4 +744,22 @@ public class SharedExceptionHandler {
                 "The given credential_configuration_id is unknown or not enabled for this tenant"
         );
     }
+
+    // Shared rather than issuance-only (EUD-168 code review): thrown from both the issuance path
+    // (SchemaDeliveryCeiling.validateWithinCeiling) and the backoffice delivery-config PUT
+    // (TenantDeliveryConfigServiceImpl), matching where the exception class itself lives.
+    @ExceptionHandler(DeliveryModeNotEligibleException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public Mono<GlobalErrorMessage> handleDeliveryModeNotEligibleException(
+            DeliveryModeNotEligibleException ex,
+            ServerHttpRequest request
+    ) {
+        return errors.handleWith(
+                ex, request,
+                GlobalErrorTypes.DELIVERY_MODE_NOT_ELIGIBLE.getCode(),
+                "Delivery mode not eligible",
+                HttpStatus.CONFLICT,
+                "The declared delivery mode is not eligible for this credential type"
+        );
+    }
 }

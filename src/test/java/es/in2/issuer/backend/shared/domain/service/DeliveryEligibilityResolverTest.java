@@ -1,8 +1,6 @@
 package es.in2.issuer.backend.shared.domain.service;
 
-import es.in2.issuer.backend.shared.domain.model.dto.credential.profile.CredentialProfile;
 import es.in2.issuer.backend.shared.domain.model.enums.DeliveryMode;
-import es.in2.issuer.backend.shared.infrastructure.config.CredentialProfileRegistry;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -21,79 +19,106 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class DeliveryEligibilityResolverTest {
 
-    private static final String CONFIG_ID = "learcredential.employee.w3c.4";
+    private static final String BOUND = "learcredential.employee.w3c.4";
+    private static final String UNBOUND = "gx.labelcredential.w3c.2";
+
+    private static final Set<DeliveryMode> WALLET_ONLY = EnumSet.of(DeliveryMode.EMAIL, DeliveryMode.UI);
+    private static final Set<DeliveryMode> ALL_MODES = EnumSet.allOf(DeliveryMode.class);
 
     @Mock
     private TenantDeliveryConfigService tenantDeliveryConfigService;
 
     @Mock
-    private CredentialProfileRegistry credentialProfileRegistry;
+    private SchemaDeliveryCeiling schemaDeliveryCeiling;
 
     @InjectMocks
     private DeliveryEligibilityResolver resolver;
 
-    private static CredentialProfile profile(boolean cnfRequired) {
-        return CredentialProfile.builder()
-                .credentialConfigurationId(CONFIG_ID)
-                .format("jwt_vc_json")
-                .cnfRequired(cnfRequired)
-                .build();
+    @Nested
+    class DefaultsToTheCeiling {
+
+        @Test
+        void resolveEligibleModes_noConfigAndUnboundType_defaultsToEveryMode() {
+            when(schemaDeliveryCeiling.resolveEligibleModes(UNBOUND)).thenReturn(ALL_MODES);
+            when(tenantDeliveryConfigService.getEligibleModes(UNBOUND)).thenReturn(Mono.empty());
+
+            StepVerifier.create(resolver.resolveEligibleModes(UNBOUND))
+                    .assertNext(modes -> assertEquals(ALL_MODES, modes))
+                    .verifyComplete();
+        }
+
+        @Test
+        void resolveEligibleModes_noConfigAndBoundType_defaultsToWalletModesOnly() {
+            when(schemaDeliveryCeiling.resolveEligibleModes(BOUND)).thenReturn(WALLET_ONLY);
+            when(tenantDeliveryConfigService.getEligibleModes(BOUND)).thenReturn(Mono.empty());
+
+            StepVerifier.create(resolver.resolveEligibleModes(BOUND))
+                    .assertNext(modes -> assertEquals(WALLET_ONLY, modes))
+                    .verifyComplete();
+        }
     }
 
     @Nested
-    class GetEligibleModes {
+    class ConfigurationNarrowsButNeverWidens {
 
         @Test
-        void getEligibleModes_configExplicit_returnsConfiguredSetVerbatim() {
-            when(tenantDeliveryConfigService.getEligibleModes(CONFIG_ID))
+        void resolveEligibleModes_configNarrowerThanCeiling_returnsTheConfiguredSubset() {
+            when(schemaDeliveryCeiling.resolveEligibleModes(UNBOUND)).thenReturn(ALL_MODES);
+            when(tenantDeliveryConfigService.getEligibleModes(UNBOUND))
                     .thenReturn(Mono.just(EnumSet.of(DeliveryMode.EMAIL)));
 
-            StepVerifier.create(resolver.getEligibleModes(CONFIG_ID))
+            StepVerifier.create(resolver.resolveEligibleModes(UNBOUND))
+                    .assertNext(modes -> assertEquals(Set.of(DeliveryMode.EMAIL), modes))
+                    .verifyComplete();
+        }
+
+        /**
+         * The case the ceiling exists for (AC-04): a configuration written before the rule, still listing
+         * {@code direct} for a bound type. Honouring it would let tenant configuration re-enable a mode the
+         * schema forbids, which is precisely the divergence ADR-110 closes.
+         */
+        @Test
+        void resolveEligibleModes_legacyConfigEnablingDirectOnBoundType_intersectsItAway() {
+            when(schemaDeliveryCeiling.resolveEligibleModes(BOUND)).thenReturn(WALLET_ONLY);
+            when(tenantDeliveryConfigService.getEligibleModes(BOUND))
+                    .thenReturn(Mono.just(EnumSet.of(DeliveryMode.DIRECT, DeliveryMode.EMAIL)));
+
+            StepVerifier.create(resolver.resolveEligibleModes(BOUND))
                     .assertNext(modes -> assertEquals(Set.of(DeliveryMode.EMAIL), modes))
                     .verifyComplete();
         }
 
         @Test
-        void getEligibleModes_configAbsentAndCnfNotRequired_defaultsToAllModes() {
-            when(tenantDeliveryConfigService.getEligibleModes(CONFIG_ID)).thenReturn(Mono.empty());
-            when(credentialProfileRegistry.getByConfigurationId(CONFIG_ID)).thenReturn(profile(false));
-
-            StepVerifier.create(resolver.getEligibleModes(CONFIG_ID))
-                    .assertNext(modes -> assertEquals(EnumSet.allOf(DeliveryMode.class), modes))
-                    .verifyComplete();
-        }
-
-        @Test
-        void getEligibleModes_configAbsentAndCnfRequired_defaultExcludesDirect() {
-            // Mirrors IssuanceWorkflowImpl#resolveAndValidateDeliveryModes' own default (EUD-167),
-            // so the admin view never shows a mode as eligible that issuance would reject.
-            when(tenantDeliveryConfigService.getEligibleModes(CONFIG_ID)).thenReturn(Mono.empty());
-            when(credentialProfileRegistry.getByConfigurationId(CONFIG_ID)).thenReturn(profile(true));
-
-            StepVerifier.create(resolver.getEligibleModes(CONFIG_ID))
-                    .assertNext(modes -> assertEquals(Set.of(DeliveryMode.EMAIL, DeliveryMode.UI), modes))
-                    .verifyComplete();
-        }
-
-        @Test
-        void getEligibleModes_configuredSetIncludesDirectEvenWhenCnfRequired_returnedAsIs() {
-            // EC-04: config persists what the admin set verbatim; the cnfRequired hard rule is
-            // enforced at issuance time (IssuanceWorkflowImpl), not filtered out of this query.
-            when(tenantDeliveryConfigService.getEligibleModes(CONFIG_ID))
+        void resolveEligibleModes_configEntirelyAboveTheCeiling_returnsEmptyRatherThanTheCeiling() {
+            when(schemaDeliveryCeiling.resolveEligibleModes(BOUND)).thenReturn(WALLET_ONLY);
+            when(tenantDeliveryConfigService.getEligibleModes(BOUND))
                     .thenReturn(Mono.just(EnumSet.of(DeliveryMode.DIRECT)));
 
-            StepVerifier.create(resolver.getEligibleModes(CONFIG_ID))
-                    .assertNext(modes -> assertEquals(Set.of(DeliveryMode.DIRECT), modes))
+            // Empty is the honest answer: the tenant configured exactly one mode and the schema forbids it.
+            // Falling back to the ceiling here would silently ignore the tenant's own policy.
+            StepVerifier.create(resolver.resolveEligibleModes(BOUND))
+                    .assertNext(modes -> assertEquals(Set.of(), modes))
                     .verifyComplete();
         }
+    }
 
+    @Nested
+    class CeilingErrorsPropagateAsOnError {
+
+        /**
+         * Code review (EUD-168): the ceiling lookup must stay deferred inside the reactive chain, not run
+         * eagerly when this method is called. Constructing the Mono here must not throw even though the
+         * mocked ceiling always throws -- only subscribing (StepVerifier.create) may trigger it.
+         */
         @Test
-        void getEligibleModes_repositoryFails_propagatesErrorInsteadOfDefault() {
-            when(tenantDeliveryConfigService.getEligibleModes(CONFIG_ID))
-                    .thenReturn(Mono.error(new RuntimeException("db unavailable")));
+        void resolveEligibleModes_unknownConfigId_signalsOnErrorRatherThanThrowingAtAssembly() {
+            when(schemaDeliveryCeiling.resolveEligibleModes("unknown"))
+                    .thenThrow(new IllegalStateException("Unknown credential_configuration_id reached the delivery ceiling: unknown"));
 
-            StepVerifier.create(resolver.getEligibleModes(CONFIG_ID))
-                    .expectError(RuntimeException.class)
+            Mono<Set<DeliveryMode>> result = resolver.resolveEligibleModes("unknown");
+
+            StepVerifier.create(result)
+                    .expectError(IllegalStateException.class)
                     .verify();
         }
     }

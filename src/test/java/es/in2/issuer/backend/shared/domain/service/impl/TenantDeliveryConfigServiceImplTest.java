@@ -2,7 +2,9 @@ package es.in2.issuer.backend.shared.domain.service.impl;
 
 import es.in2.issuer.backend.shared.domain.exception.InvalidDeliveryConfigException;
 import es.in2.issuer.backend.shared.domain.model.entities.TenantConfig;
+import es.in2.issuer.backend.shared.domain.exception.DeliveryModeNotEligibleException;
 import es.in2.issuer.backend.shared.domain.model.enums.DeliveryMode;
+import es.in2.issuer.backend.shared.domain.service.SchemaDeliveryCeiling;
 import es.in2.issuer.backend.shared.infrastructure.repository.TenantConfigRepository;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -31,11 +33,14 @@ class TenantDeliveryConfigServiceImplTest {
     @Mock
     private TenantConfigRepository tenantConfigRepository;
 
+    @Mock
+    private SchemaDeliveryCeiling schemaDeliveryCeiling;
+
     private TenantDeliveryConfigServiceImpl service;
 
     @org.junit.jupiter.api.BeforeEach
     void setUp() {
-        service = new TenantDeliveryConfigServiceImpl(tenantConfigRepository);
+        service = new TenantDeliveryConfigServiceImpl(tenantConfigRepository, schemaDeliveryCeiling);
     }
 
     @Nested
@@ -169,6 +174,39 @@ class TenantDeliveryConfigServiceImplTest {
 
             verify(tenantConfigRepository).findByConfigKey(EXPECTED_KEY);
             verify(tenantConfigRepository).findByConfigKey("issuer.delivery.modes." + otherConfigId);
+        }
+    }
+
+    @Nested
+    class CeilingOnWrites {
+
+        /**
+         * AC-05. Rejecting at the boundary rather than storing and ignoring: a persisted mode above the
+         * schema ceiling reads as enabled to whoever inspects the configuration later, which is exactly
+         * the divergence between stored policy and real behaviour that ADR-110 closes.
+         */
+        @Test
+        void setEligibleModes_directOnBoundType_rejectsWithoutTouchingTheRepository() {
+            doThrow(new DeliveryModeNotEligibleException("direct not eligible for " + CONFIG_ID))
+                    .when(schemaDeliveryCeiling).validateWithinCeiling(eq(CONFIG_ID), any());
+
+            StepVerifier.create(service.setEligibleModes(CONFIG_ID, EnumSet.of(DeliveryMode.DIRECT)))
+                    .expectError(DeliveryModeNotEligibleException.class)
+                    .verify();
+
+            verify(tenantConfigRepository, never()).save(any());
+        }
+
+        @Test
+        void setEligibleModes_withinCeiling_persistsNormally() {
+            when(tenantConfigRepository.findByConfigKey(EXPECTED_KEY)).thenReturn(Mono.empty());
+            when(tenantConfigRepository.save(any(TenantConfig.class)))
+                    .thenAnswer(inv -> Mono.just(inv.getArgument(0, TenantConfig.class)));
+
+            StepVerifier.create(service.setEligibleModes(CONFIG_ID, EnumSet.of(DeliveryMode.EMAIL)))
+                    .verifyComplete();
+
+            verify(tenantConfigRepository).save(any(TenantConfig.class));
         }
     }
 }

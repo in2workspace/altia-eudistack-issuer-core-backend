@@ -1,8 +1,10 @@
 package es.in2.issuer.backend.shared.domain.service.impl;
 
+import es.in2.issuer.backend.shared.domain.exception.DeliveryModeNotEligibleException;
 import es.in2.issuer.backend.shared.domain.exception.InvalidDeliveryConfigException;
 import es.in2.issuer.backend.shared.domain.model.entities.TenantConfig;
 import es.in2.issuer.backend.shared.domain.model.enums.DeliveryMode;
+import es.in2.issuer.backend.shared.domain.service.SchemaDeliveryCeiling;
 import es.in2.issuer.backend.shared.domain.service.TenantDeliveryConfigService;
 import es.in2.issuer.backend.shared.infrastructure.repository.TenantConfigRepository;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +21,7 @@ public class TenantDeliveryConfigServiceImpl implements TenantDeliveryConfigServ
     private static final String KEY_PREFIX = "issuer.delivery.modes.";
 
     private final TenantConfigRepository tenantConfigRepository;
+    private final SchemaDeliveryCeiling schemaDeliveryCeiling;
 
     @Override
     public Mono<Set<DeliveryMode>> getEligibleModes(String credentialConfigurationId) {
@@ -31,6 +34,13 @@ public class TenantDeliveryConfigServiceImpl implements TenantDeliveryConfigServ
     public Mono<Void> setEligibleModes(String credentialConfigurationId, Set<DeliveryMode> modes) {
         if (modes == null || modes.isEmpty()) {
             return Mono.error(new InvalidDeliveryConfigException("At least one delivery mode is required"));
+        }
+        // Reject at the boundary rather than storing a configuration issuance would ignore: a persisted
+        // mode above the schema ceiling reads as enabled to whoever inspects the config later (EUD-168).
+        try {
+            schemaDeliveryCeiling.validateWithinCeiling(credentialConfigurationId, modes);
+        } catch (DeliveryModeNotEligibleException ex) {
+            return Mono.error(ex);
         }
         String key = keyFor(credentialConfigurationId);
         String csv = DeliveryMode.toCanonicalCsv(modes);

@@ -42,6 +42,21 @@ public class StatusListWorkflow {
                 ));
     }
 
+    @Observed(name = "statuslist.release-entry", contextualName = "statuslist-release-entry")
+    public Mono<Void> releaseEntry(String issuanceId) {
+        log.info("action=releaseStatusListEntry status=started issuanceId={}", issuanceId);
+        requireNonNullParam(issuanceId, "issuanceId");
+
+        return statusListProvider.releaseEntry(issuanceId)
+                .doOnSuccess(v -> log.info(
+                        "action=releaseStatusListEntry status=completed issuanceId={}", issuanceId
+                ))
+                .doOnError(e -> log.warn(
+                        "action=releaseStatusListEntry status=failed issuanceId={} error={}",
+                        issuanceId, e.toString()
+                ));
+    }
+
     @Observed(name = "statuslist.get-signed-credential", contextualName = "statuslist-get-signed-credential")
     public Mono<String> getSignedStatusListCredential(Long listId, StatusListFormat expectedFormat) {
         requireNonNullParam(listId, "listId");

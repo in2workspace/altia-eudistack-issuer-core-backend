@@ -109,6 +109,37 @@ class CredentialOfferServiceImplTest {
                 eq("test@example.com"), anyString(), anyString(), anyString(), eq("TestOrg"), isNull());
     }
 
+    /**
+     * Code-review F3b. The onErrorMap that turns any email-leg failure into the safe
+     * EmailCommunicationException constant used to wrap only the send step; a failure in the
+     * repository lookup that precedes it (findCredentialOfferEmailInfoByIssuanceId) reached
+     * describeEmailFailure raw. An R2DBC failure names table/column/schema, and the schema name is
+     * the tenant.
+     */
+    @Test
+    void createAndDeliverCredentialOffer_whenEmailInfoLookupFails_reportsTheSafeConstantNotTheRawMessage() {
+        String issuanceId = "test-issuance-id";
+        String configId = "learcredential.employee.w3c.4";
+
+        when(issuerStateCacheStore.add(anyString(), eq(issuanceId)))
+                .thenReturn(Mono.just("cached"));
+        when(credentialOfferCacheRepository.saveCredentialOffer(any()))
+                .thenReturn(Mono.just("cache-nonce"));
+        when(issuanceService.findCredentialOfferEmailInfoByIssuanceId(issuanceId))
+                .thenReturn(Mono.error(new RuntimeException(
+                        "relation \"tenant_acme.issuance\" violates foreign key constraint")));
+
+        StepVerifier.create(credentialOfferService.createAndDeliverCredentialOffer(
+                        issuanceId, configId, "authorization_code", "test@example.com", "email", "refresh-token", "https://example.com", "https://example.com/wallet"))
+                .assertNext(result -> {
+                    assertThat(result.emailError()).isEqualTo("Error during communication with the mail server");
+                    assertThat(result.emailError()).doesNotContain("tenant_acme");
+                })
+                .verifyComplete();
+
+        verifyNoInteractions(emailService);
+    }
+
     @Test
     void createAndDeliverCredentialOffer_withPreAuthorizedCodeAndEmailDelivery_shouldSendEmailWithoutTxCode() {
         String issuanceId = "test-issuance-id";
