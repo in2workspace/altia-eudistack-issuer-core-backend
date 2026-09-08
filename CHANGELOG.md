@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **EUD-169 — Delivery modes become a column of the tenant credential catalog (FR-09, FR-02)**: `tenant_credential_profile` gains a `delivery_modes` column (`V13`, additive + idempotent + fail-closed guard, backfilled losslessly from the retiring `tenant_config` keys). `GET /admin/v1/credential-catalog` now returns, per entry, `deliveryModes` (effective modes: stored ∩ schema ceiling, or the ceiling itself when nothing is stored) and `schemaEligibleModes` (the ceiling alone, carried over from EUD-168's `schema_eligible_modes` contract). `PUT` gains an optional `deliveryModesByConfigurationId` map — omitting a type preserves its stored modes (no read-modify-write, engine-side `COALESCE` on the `UPSERT`); a mode outside the schema ceiling is rejected with `409 delivery_mode_not_eligible`; a malformed or incoherent declaration is `400`. Fully additive contract: the live `eudistack-mfe-credential-manager` consumer needs no change.
+- **Closed the delivery-eligibility seam at issuance time**: `IssuanceWorkflowImpl` no longer re-implements the tenant-configuration-∩-ceiling intersection inline against a separate `TenantConfigService`-backed cache — it now consumes the same `DeliveryEligibilityResolver` the admin-facing catalog reads through, so issuance can never accept a mode the catalog would reject, or reject one the catalog promised.
+
+### Removed
+
+- **The parallel delivery-config module** (`/api/v1/backoffice/delivery-config/{credentialConfigurationId}`, `TenantDeliveryConfigService(Impl)`, backed by `tenant_config` keys `issuer.delivery.modes.*`) — superseded by the catalog column above (EUD-169, single cutover). The `tenant_config` keys themselves are left in place, inert (no code path reads them anymore) as a rollback safety net; their physical purge is tracked as separate tech debt.
+
 ## [3.8.0] - 2026-09-07
 
 ### Fixed
