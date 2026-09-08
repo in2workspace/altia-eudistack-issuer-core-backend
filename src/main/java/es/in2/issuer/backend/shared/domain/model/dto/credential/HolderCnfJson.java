@@ -35,13 +35,6 @@ public final class HolderCnfJson {
         }
     }
 
-    /**
-     * Empty map for an absent value, so callers can fall back to the key-proof binding.
-     *
-     * <p>{@code private} (EUD-168 TD-15): {@link #readValidated} is the only production entry
-     * point since TD-13 -- a public, unvalidated sibling sitting next to it is exactly the
-     * reintroduction hazard {@link HolderKey}'s own javadoc warns about for the write side.
-     */
     private static Map<String, Object> read(String json) {
         if (json == null || json.isBlank()) {
             return Map.of();

@@ -1,6 +1,7 @@
 package es.in2.issuer.backend.issuance.application.workflow.impl;
 
 import es.in2.issuer.backend.issuance.application.workflow.IssuanceWorkflow;
+import es.in2.issuer.backend.oidc4vci.application.workflow.impl.Oid4VciCredentialWorkflowImpl;
 import es.in2.issuer.backend.oidc4vci.domain.service.CredentialOfferService;
 import es.in2.issuer.backend.shared.application.workflow.CredentialSignerWorkflow;
 import es.in2.issuer.backend.shared.domain.exception.CredentialTypeUnsupportedException;
@@ -167,12 +168,6 @@ public class IssuanceWorkflowImpl implements IssuanceWorkflow {
 
         String delivery = request.delivery() != null ? request.delivery() : DEFAULT_DELIVERY;
 
-        // TD-05: keepOnlyOid4vciDeliveryModes can throw synchronously (InvalidDeliveryModeException).
-        // Called as a plain statement here (as it was before), that throw would escape this method
-        // before any Mono even exists -- safe today only because the sole caller (BootstrapController)
-        // happens to invoke this inside Mono.deferContextual, which is Reactor's business, not this
-        // method's contract. Mono.fromCallable defers the call to subscription time so the exception
-        // always surfaces as a normal error signal, regardless of how a caller invokes this method.
         return Mono.fromCallable(() -> keepOnlyOid4vciDeliveryModes(delivery))
                 .flatMap(safeDelivery -> validateRequest(request, null)
                         .then(Mono.defer(() -> payloadSchemaValidator.validate(request.credentialConfigurationId(), request.payload())))
@@ -531,11 +526,6 @@ public class IssuanceWorkflowImpl implements IssuanceWorkflow {
                                                                     .signedCredential(signedCredential)
                                                                     .build());
                                                 })
-                                                // M1: the status list entry above was already reserved -- if
-                                                // signing or persistence fails after that, it is never
-                                                // referenced by anything again and stays wasted forever unless
-                                                // released here. Best-effort: a release failure must not mask
-                                                // the original failure, only be logged.
                                                 .onErrorResume(error -> releaseStatusListEntryBestEffort(processId, issuanceId, error))
                                 )
                 );
@@ -609,13 +599,6 @@ public class IssuanceWorkflowImpl implements IssuanceWorkflow {
                 .build();
     }
 
-    /**
-     * M1: releases the status list entry {@code performDirectIssuance} already reserved for
-     * {@code issuanceId}, then re-raises {@code original} unchanged. A release failure is logged and
-     * swallowed rather than replacing {@code original} -- the caller sees the real failure (signing or
-     * persistence) either way, and losing the release is a smaller, already-tolerated problem (the
-     * exact one this method exists to shrink the odds of, not eliminate entirely).
-     */
     private <T> Mono<T> releaseStatusListEntryBestEffort(String processId, UUID issuanceId, Throwable original) {
         return statusListWorkflow.releaseEntry(issuanceId.toString())
                 .doOnSuccess(v -> log.debug(
@@ -665,16 +648,6 @@ public class IssuanceWorkflowImpl implements IssuanceWorkflow {
                 .collect(Collectors.joining(","));
     }
 
-    /**
-     * TD-05: {@code DeliveryMode.parse}'s {@code IllegalArgumentException} has no
-     * {@code @ExceptionHandler} registered anywhere -- left uncaught, it falls through to a generic
-     * 500 instead of the 400 {@code invalid_request} ES-01 requires. Caught and re-thrown as
-     * {@link InvalidDeliveryModeException} here, exactly as {@link #resolveAndValidateDeliveryModes}
-     * already does for the authenticated path -- both are evaluated inside a reactive operator
-     * ({@code Mono.deferContextual} at the bootstrap controller, {@code Mono.defer} here), so a
-     * synchronous throw is captured as an error signal and reaches {@code IssuanceExceptionHandler}
-     * like any other.
-     */
     private String keepOnlyOid4vciDeliveryModes(String delivery) {
         final Set<DeliveryMode> modes;
         try {

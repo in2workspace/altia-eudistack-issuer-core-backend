@@ -65,7 +65,7 @@ public class IdempotencyFilter implements WebFilter {
                 ? exchange.getRequest().getURI().getHost()
                 : tenantHeader;
 
-        // The cache key MUST bind to the caller's own identity (security finding H2): scoping by
+        // The cache key MUST bind to the caller's own identity: scoping by
         // tenant alone lets any organization within the same tenant collide on a shared or
         // predictable idempotency key and receive another organization's cached response --
         // including a directly-delivered signed credential (EUD-167), which exists nowhere else

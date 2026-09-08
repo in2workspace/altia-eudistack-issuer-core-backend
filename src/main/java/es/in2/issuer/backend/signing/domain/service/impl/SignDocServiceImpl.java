@@ -96,18 +96,6 @@ public class SignDocServiceImpl implements SignDocService {
                 );
     }
 
-    /**
-     * H1: the CSC {@code signDoc} operation builds the JWS header itself -- unlike the sibling
-     * {@code signHash} path, this service never constructs {@code alg}/{@code x5c} locally, so it
-     * cannot assume either is trustworthy just because a response came back. Beyond the pre-existing
-     * payload-equality check, this now verifies the signature/alg/certificate chain the finding named:
-     * the algorithm is restricted to a closed allowlist, the leaf certificate in {@code x5c} must be
-     * the exact certificate {@code getCredentialInfo} already returned for this {@code credentialId}
-     * (the QTSP signed with the credential we actually asked for, not a substituted one), and the
-     * signature is verified cryptographically against that certificate's public key. Full chain-of-trust
-     * validation to a root CA and revocation checking (OCSP/CRL) are deliberately out of scope -- no
-     * trust-anchor infrastructure exists in this codebase yet; see EUD-167/tech-debt.md.
-     */
     private Mono<SigningResult> verifyAndBuild(SigningRequest request, CertificateInfo certInfo, String signedDocB64) {
         return Mono.fromCallable(() -> {
             String signedDoc = new String(Base64.getDecoder().decode(signedDocB64), StandardCharsets.UTF_8);

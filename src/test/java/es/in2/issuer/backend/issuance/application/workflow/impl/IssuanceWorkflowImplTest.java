@@ -1665,14 +1665,11 @@ class IssuanceWorkflowImplTest {
         verify(issuanceService, never()).saveIssuance(any());
         verify(credentialIssuedLogger).logFailed(eq(CONFIG_ID), any());
         verify(credentialIssuedLogger, never()).logIssued(any());
-        // M1: the status list entry allocated above must not be left permanently orphaned.
         verify(statusListWorkflow).releaseEntry(anyString());
     }
 
     @Test
     void directDeliverySignerFailureShouldStillFailWithOriginalErrorWhenReleaseAlsoFails() {
-        // M1: a failure while releasing the orphaned entry must never replace or hide the real
-        // failure (the signing error) -- it can only ever add a log line.
         JsonNode payload = new ObjectMapper().createObjectNode();
         IssuanceRequest request = new IssuanceRequest(CONFIG_ID, payload, "direct", EMAIL, null);
         CredentialProfile profile = profileWithoutCnf();
@@ -1822,7 +1819,6 @@ class IssuanceWorkflowImplTest {
 
         verify(credentialIssuedLogger).logFailed(eq(CONFIG_ID), any());
         verify(credentialIssuedLogger, never()).logIssued(any());
-        // M1: a persistence failure orphans the status list entry just as much as a signing failure.
         verify(statusListWorkflow).releaseEntry(anyString());
     }
 

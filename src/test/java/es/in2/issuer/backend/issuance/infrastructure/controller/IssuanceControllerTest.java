@@ -388,7 +388,6 @@ class IssuanceControllerTest {
         org.mockito.Mockito.verifyNoInteractions(issuanceWorkflow);
     }
 
-    /** TDG-16: {@code credential_configuration_id} closed vocabulary bound (letters/digits/dots/hyphens, max 100). */
     @Test
     void createIssuance_CredentialConfigurationIdContainsControlCharacters_Returns400WithoutInvokingWorkflow() throws JsonProcessingException {
         IssuanceRequest request = IssuanceRequest.builder()
@@ -410,7 +409,6 @@ class IssuanceControllerTest {
         org.mockito.Mockito.verifyNoInteractions(issuanceWorkflow);
     }
 
-    /** TDG-16: {@code grant_type} closed vocabulary bound (letters/digits/colon/underscore/hyphen, max 64). */
     @Test
     void createIssuance_GrantTypeContainsControlCharacters_Returns400WithoutInvokingWorkflow() throws JsonProcessingException {
         IssuanceRequest request = IssuanceRequest.builder()
