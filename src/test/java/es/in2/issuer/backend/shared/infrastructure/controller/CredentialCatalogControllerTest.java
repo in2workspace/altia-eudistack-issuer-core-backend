@@ -9,6 +9,7 @@ import es.in2.issuer.backend.shared.domain.model.dto.CredentialCatalogEntryDto;
 import es.in2.issuer.backend.oidc4vci.domain.service.NonceService;
 import es.in2.issuer.backend.shared.domain.model.enums.UserRole;
 import es.in2.issuer.backend.shared.domain.service.AccessTokenService;
+import es.in2.issuer.backend.shared.domain.service.AuditService;
 import es.in2.issuer.backend.shared.domain.service.TenantCredentialProfileService;
 import es.in2.issuer.backend.shared.domain.service.TenantRegistryService;
 import es.in2.issuer.backend.shared.infrastructure.config.IssuanceMetrics;
@@ -29,6 +30,7 @@ import java.util.List;
 import static es.in2.issuer.backend.shared.domain.util.EndpointsConstants.CREDENTIAL_CATALOG_PATH;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -48,6 +50,9 @@ class CredentialCatalogControllerTest {
 
     @MockitoBean
     private TenantCredentialProfileService tenantCredentialProfileService;
+
+    @MockitoBean
+    private AuditService auditService;
 
     // Required only because @WebFluxTest loads all @ControllerAdvice and WebFilter beans:
     // Oidc4vciExceptionHandler depends on NonceService, IdempotencyFilter on IssuanceMetrics.
@@ -128,6 +133,30 @@ class CredentialCatalogControllerTest {
                 .bodyValue("{\"enabledConfigurationIds\":[\"learcredential.employee.w3c.4\"]}")
                 .exchange()
                 .expectStatus().isOk();
+
+        // Security review (EUD-169, F2): a catalog write is a policy change and must be
+        // audit-logged with the caller's organization as actor -- not just a plain log line.
+        verify(auditService).auditSuccess(eq("tenant.credential_catalog.changed"), eq("org-1"), eq("credential-catalog"), anyString(), any());
+    }
+
+    @Test
+    void updateCatalog_serviceFails_auditsFailureNotSuccess() {
+        when(accessTokenService.getAuthorizationContext(anyString()))
+                .thenReturn(Mono.just(admin()));
+        when(tenantCredentialProfileService.updateCatalog(any(), any()))
+                .thenReturn(Mono.error(new UnknownCredentialConfigurationException("Unknown credential configuration id(s): [nope]")));
+
+        webTestClient.mutateWith(csrf())
+                .put()
+                .uri(CREDENTIAL_CATALOG_PATH)
+                .header("Authorization", "Bearer token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"enabledConfigurationIds\":[\"nope\"]}")
+                .exchange()
+                .expectStatus().isBadRequest();
+
+        verify(auditService).auditFailure(eq("tenant.credential_catalog.changed"), eq("org-1"), anyString(), any());
+        verify(auditService, never()).auditSuccess(anyString(), anyString(), anyString(), anyString(), any());
     }
 
     @Test

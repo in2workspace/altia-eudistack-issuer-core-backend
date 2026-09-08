@@ -6,6 +6,7 @@ import es.in2.issuer.backend.shared.domain.model.dto.CredentialCatalogEntryDto;
 import es.in2.issuer.backend.shared.domain.model.dto.UpdateCredentialCatalogRequest;
 import es.in2.issuer.backend.shared.domain.model.enums.DeliveryMode;
 import es.in2.issuer.backend.shared.domain.service.AccessTokenService;
+import es.in2.issuer.backend.shared.domain.service.AuditService;
 import es.in2.issuer.backend.shared.domain.service.TenantCredentialProfileService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +28,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static es.in2.issuer.backend.shared.domain.util.Constants.TENANT_DOMAIN_CONTEXT_KEY;
 import static es.in2.issuer.backend.shared.domain.util.EndpointsConstants.CREDENTIAL_CATALOG_PATH;
 
 /**
@@ -53,8 +55,12 @@ import static es.in2.issuer.backend.shared.domain.util.EndpointsConstants.CREDEN
 @RequiredArgsConstructor
 public class CredentialCatalogController {
 
+    private static final String AUDIT_EVENT = "tenant.credential_catalog.changed";
+    private static final String AUDIT_RESOURCE_TYPE = "credential-catalog";
+
     private final AccessTokenService accessTokenService;
     private final TenantCredentialProfileService tenantCredentialProfileService;
+    private final AuditService auditService;
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     @ResponseStatus(HttpStatus.OK)
@@ -64,15 +70,33 @@ public class CredentialCatalogController {
                 .then(Mono.defer(tenantCredentialProfileService::getCatalog));
     }
 
+    /**
+     * A tenant's delivery-mode policy governs whether a credential can be delivered without
+     * holder binding, and a SysAdmin can write it for any tenant, not just their own -- both
+     * of which make an audit trail non-optional here (security review, EUD-169; conv-quality-
+     * security-gates.md §3.3/§3.4/§10.1). {@code doOnSuccess}/{@code doOnError} rather than a
+     * `try`/`catch`: the write itself must not fail because the audit sink does.
+     */
     @PutMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
     @ResponseStatus(HttpStatus.OK)
     public Mono<Void> updateCatalog(
             @RequestHeader(HttpHeaders.AUTHORIZATION) String authorizationHeader,
             @Valid @RequestBody UpdateCredentialCatalogRequest request) {
         return authorizeTenantAdminWrite(authorizationHeader)
-                .then(Mono.defer(() -> tenantCredentialProfileService.updateCatalog(
-                        request.enabledConfigurationIds(),
-                        parseDeliveryModes(request.deliveryModesByConfigurationId()))));
+                .flatMap(ctx -> Mono.deferContextual(reactorCtx -> {
+                    String tenant = reactorCtx.getOrDefault(TENANT_DOMAIN_CONTEXT_KEY, "unknown");
+                    return tenantCredentialProfileService.updateCatalog(
+                                    request.enabledConfigurationIds(),
+                                    parseDeliveryModes(request.deliveryModesByConfigurationId()))
+                            .doOnSuccess(v -> auditService.auditSuccess(AUDIT_EVENT, ctx.organizationIdentifier(),
+                                    AUDIT_RESOURCE_TYPE, tenant, Map.of(
+                                            "enabledConfigurationIds", request.enabledConfigurationIds(),
+                                            "deliveryModesByConfigurationId",
+                                            request.deliveryModesByConfigurationId() == null ? Map.of() : request.deliveryModesByConfigurationId(),
+                                            "sysAdmin", ctx.isSysAdmin())))
+                            .doOnError(e -> auditService.auditFailure(AUDIT_EVENT, ctx.organizationIdentifier(),
+                                    e.getClass().getSimpleName(), Map.of("tenant", tenant)));
+                }));
     }
 
     /**
