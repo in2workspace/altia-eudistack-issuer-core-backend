@@ -3,6 +3,7 @@ package es.in2.issuer.backend.shared.domain.service.impl;
 import es.in2.issuer.backend.shared.domain.exception.CredentialCatalogNotConfiguredException;
 import es.in2.issuer.backend.shared.domain.model.dto.CredentialCatalogEntryDto;
 import es.in2.issuer.backend.shared.domain.model.entities.TenantCredentialProfile;
+import es.in2.issuer.backend.shared.domain.model.enums.DeliveryMode;
 import es.in2.issuer.backend.shared.domain.service.TenantCredentialProfileService;
 import es.in2.issuer.backend.shared.infrastructure.config.CredentialProfileRegistry;
 import es.in2.issuer.backend.shared.infrastructure.repository.TenantCredentialProfileRepository;
@@ -11,14 +12,18 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
+import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.transaction.reactive.TransactionalOperator;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import reactor.util.context.Context;
 import reactor.util.context.ContextView;
 
 import java.time.Instant;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import static es.in2.issuer.backend.shared.domain.util.Constants.TENANT_DOMAIN_CONTEXT_KEY;
@@ -141,6 +146,121 @@ class CredentialCatalogTransactionalIT extends PostgresIntegrationBase {
                 repository.findAllByEnabledTrue().collectList().contextWrite(ctx(TENANT_A)).block();
         assertThat(rows).extracting(TenantCredentialProfile::credentialConfigurationId)
                 .containsExactly(configId);
+    }
+
+    /**
+     * EC-01: a write that omits a type's delivery-modes entry entirely preserves whatever
+     * is already stored -- the engine-side COALESCE in the UPSERT (task 6), not a
+     * read-modify-write.
+     */
+    @Test
+    void updateCatalog_omittingModesField_preservesStoredModes() {
+        service.updateCatalog(Set.of(configId), Map.of(configId, EnumSet.of(DeliveryMode.EMAIL)))
+                .contextWrite(ctx(TENANT_A)).block();
+
+        service.updateCatalog(Set.of(configId)).contextWrite(ctx(TENANT_A)).block();
+
+        Set<DeliveryMode> configured = service.findConfiguredDeliveryModes(configId)
+                .contextWrite(ctx(TENANT_A)).block();
+        assertThat(configured).containsExactly(DeliveryMode.EMAIL);
+    }
+
+    /**
+     * EC-02: disabling a type drops its row -- and with it, its stored delivery modes.
+     * Re-enabling it afterward must reopen it to the schema ceiling (AC-03), not resurrect
+     * the modes it had before being disabled.
+     */
+    @Test
+    void disablingType_dropsItsRowAndDeliveryModes() {
+        service.updateCatalog(Set.of(configId), Map.of(configId, EnumSet.of(DeliveryMode.EMAIL)))
+                .contextWrite(ctx(TENANT_A)).block();
+
+        service.updateCatalog(Set.of()).contextWrite(ctx(TENANT_A)).block();
+        List<TenantCredentialProfile> afterDisable =
+                repository.findAllByEnabledTrue().collectList().contextWrite(ctx(TENANT_A)).block();
+        assertThat(afterDisable).isEmpty();
+
+        service.updateCatalog(Set.of(configId)).contextWrite(ctx(TENANT_A)).block();
+        Set<DeliveryMode> configuredAfterReEnable = service.findConfiguredDeliveryModes(configId)
+                .contextWrite(ctx(TENANT_A)).block();
+        assertThat(configuredAfterReEnable).isEmpty();
+    }
+
+    /**
+     * EC-03 (with modes): reapplying the same delivery-modes configuration twice is a
+     * no-op -- one row, same canonical value, no error.
+     */
+    @Test
+    void updateCatalog_reappliedWithSameModes_isIdempotent() {
+        Map<String, Set<DeliveryMode>> modes = Map.of(configId, EnumSet.of(DeliveryMode.EMAIL, DeliveryMode.UI));
+
+        service.updateCatalog(Set.of(configId), modes).contextWrite(ctx(TENANT_A)).block();
+        service.updateCatalog(Set.of(configId), modes).contextWrite(ctx(TENANT_A)).block();
+
+        List<TenantCredentialProfile> rows =
+                repository.findAllByEnabledTrue().collectList().contextWrite(ctx(TENANT_A)).block();
+        assertThat(rows).hasSize(1);
+        assertThat(rows.getFirst().deliveryModes()).isEqualTo("email,ui");
+    }
+
+    /**
+     * ES-04: two overlapping writes for the same tenant, fired concurrently (Flux.merge
+     * subscribes to both eagerly, unlike sequential blocking), must leave a single
+     * coherent row -- never a duplicate or partially-written one -- regardless of which
+     * one's delivery-modes value ultimately wins the race.
+     */
+    @Test
+    void concurrentUpdates_sameTenant_leaveNoDuplicateRows() {
+        service.updateCatalog(Set.of(configId)).contextWrite(ctx(TENANT_A)).block();
+
+        Mono<Void> writeDeclaringModes = service.updateCatalog(
+                        Set.of(configId), Map.of(configId, EnumSet.of(DeliveryMode.EMAIL)))
+                .contextWrite(ctx(TENANT_A));
+        Mono<Void> writePreservingModes = service.updateCatalog(Set.of(configId))
+                .contextWrite(ctx(TENANT_A));
+
+        Flux.merge(writeDeclaringModes, writePreservingModes).blockLast();
+
+        List<TenantCredentialProfile> rows =
+                repository.findAllByEnabledTrue().collectList().contextWrite(ctx(TENANT_A)).block();
+        assertThat(rows).hasSize(1);
+        assertThat(rows.getFirst().credentialConfigurationId()).isEqualTo(configId);
+    }
+
+    /**
+     * AC-06 / NFR-S-169-04: delivery modes stored for the same credential_configuration_id
+     * never leak between tenants.
+     */
+    @Test
+    void deliveryModes_areIsolatedBetweenTenants() {
+        service.updateCatalog(Set.of(configId), Map.of(configId, EnumSet.of(DeliveryMode.EMAIL)))
+                .contextWrite(ctx(TENANT_A)).block();
+        service.updateCatalog(Set.of(configId), Map.of(configId, EnumSet.of(DeliveryMode.UI)))
+                .contextWrite(ctx(TENANT_B)).block();
+
+        Set<DeliveryMode> configuredA = service.findConfiguredDeliveryModes(configId)
+                .contextWrite(ctx(TENANT_A)).block();
+        Set<DeliveryMode> configuredB = service.findConfiguredDeliveryModes(configId)
+                .contextWrite(ctx(TENANT_B)).block();
+
+        assertThat(configuredA).containsExactly(DeliveryMode.EMAIL);
+        assertThat(configuredB).containsExactly(DeliveryMode.UI);
+    }
+
+    /**
+     * AC-08: the retired parallel module's route no longer exists post-cutover. Bound
+     * directly to the server port (not the {@code /issuer}-prefixed helper from the base
+     * class, which is specific to the apiclient/oauth flows) since this path was never
+     * under that prefix.
+     */
+    @Test
+    void oldDeliveryConfigRoute_noLongerExists_returns404() {
+        WebTestClient.bindToServer()
+                .baseUrl("http://localhost:" + port)
+                .build()
+                .get().uri("/api/v1/backoffice/delivery-config/" + configId)
+                .exchange()
+                .expectStatus().isNotFound();
     }
 
     private CredentialCatalogEntryDto entry(List<CredentialCatalogEntryDto> catalog) {
