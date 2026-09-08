@@ -499,33 +499,37 @@ public class IssuanceWorkflowImpl implements IssuanceWorkflow {
                                 .flatMap(enrichedDataSet ->
                                         statusListWorkflow.allocateEntry(StatusPurpose.REVOCATION, statusFormat,
                                                         issuanceId.toString(), token, publicIssuerBaseUrl)
-                                                .map(entry -> {
-                                                    CredentialStatus credStatus = CredentialStatus.fromStatusListEntry(entry);
-                                                    return genericCredentialBuilder.injectCredentialStatus(
-                                                            enrichedDataSet, credStatus, credentialFormat);
-                                                })
                                                 .onErrorMap(DeliveryStageFailure.wrapUnlessAlready(DeliveryErrorCode.STATUS_LIST_UNAVAILABLE))
-                                )
-                                .flatMap(enrichedWithStatus ->
-                                        credentialSignerWorkflow.signCredential(
-                                                        token, enrichedWithStatus, configId, credentialFormat,
-                                                        cnf, issuanceId.toString(), request.email())
-                                                .onErrorMap(DeliveryStageFailure.wrapUnlessAlready(DeliveryErrorCode.SIGNING_FAILED))
-                                                .flatMap(signedCredential -> {
-                                                    CredentialStatusEnum finalStatus = determineFinalStatus(buildResult);
-                                                    Issuance issuance = buildDirectIssuanceEntity(
-                                                            issuanceId, configId, credentialFormat,
-                                                            buildResult, enrichedWithStatus,
-                                                            request.email(), originalDelivery, finalStatus, cnf);
-                                                    return issuanceService.saveIssuance(issuance)
-                                                            .doOnSuccess(saved -> log.debug(
-                                                                    "ProcessId: {} - Direct issuance saved: {} status={}",
-                                                                    processId, saved.getIssuanceId(), finalStatus))
-                                                            .onErrorMap(DeliveryStageFailure.wrapUnlessAlready(DeliveryErrorCode.PERSISTENCE_FAILED))
-                                                            .thenReturn(IssuanceResponse.builder()
-                                                                    .signedCredential(signedCredential)
-                                                                    .build());
+                                                .flatMap(entry -> {
+                                                    CredentialStatus credStatus = CredentialStatus.fromStatusListEntry(entry);
+                                                    String enrichedWithStatus = genericCredentialBuilder.injectCredentialStatus(
+                                                            enrichedDataSet, credStatus, credentialFormat);
+                                                    return credentialSignerWorkflow.signCredential(
+                                                                    token, enrichedWithStatus, configId, credentialFormat,
+                                                                    cnf, issuanceId.toString(), request.email())
+                                                            .onErrorMap(DeliveryStageFailure.wrapUnlessAlready(DeliveryErrorCode.SIGNING_FAILED))
+                                                            .flatMap(signedCredential -> {
+                                                                CredentialStatusEnum finalStatus = determineFinalStatus(buildResult);
+                                                                Issuance issuance = buildDirectIssuanceEntity(
+                                                                        issuanceId, configId, credentialFormat,
+                                                                        buildResult, enrichedWithStatus,
+                                                                        request.email(), originalDelivery, finalStatus, cnf);
+                                                                return issuanceService.saveIssuance(issuance)
+                                                                        .doOnSuccess(saved -> log.debug(
+                                                                                "ProcessId: {} - Direct issuance saved: {} status={}",
+                                                                                processId, saved.getIssuanceId(), finalStatus))
+                                                                        .onErrorMap(DeliveryStageFailure.wrapUnlessAlready(DeliveryErrorCode.PERSISTENCE_FAILED))
+                                                                        .thenReturn(IssuanceResponse.builder()
+                                                                                .signedCredential(signedCredential)
+                                                                                .build());
+                                                            });
                                                 })
+                                                // W1 (code-review): covers allocate + inject + sign + save under one
+                                                // release. injectCredentialStatus used to run in a separate .map()
+                                                // stage outside this resume's scope, so a malformed enrichedDataSet
+                                                // threw past it and leaked the entry allocateEntry had just reserved.
+                                                // releaseStatusListEntryBestEffort's delete is a no-op when nothing
+                                                // was ever allocated, so covering the allocate failure too is harmless.
                                                 .onErrorResume(error -> releaseStatusListEntryBestEffort(processId, issuanceId, error))
                                 )
                 );

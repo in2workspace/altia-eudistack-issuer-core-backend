@@ -228,6 +228,9 @@ class IssuanceWorkflowImplTest {
         // The direct leg dies where it actually died in production: reserving the status list entry.
         when(statusListWorkflow.allocateEntry(any(), any(), anyString(), anyString(), eq(BASE_URL)))
                 .thenReturn(Mono.error(new IllegalStateException("QTSP unavailable")));
+        // Code-review W1: release is now attempted even when allocateEntry itself is what failed --
+        // a no-op in production (nothing was ever allocated), but still invoked, so it must be stubbed.
+        when(statusListWorkflow.releaseEntry(anyString())).thenReturn(Mono.empty());
         when(issuanceService.saveIssuance(any(Issuance.class))).thenReturn(Mono.just(oid4vciIssuance));
         when(credentialOfferService.createAndDeliverCredentialOffer(any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(Mono.just(new CredentialOfferResult("openid-credential-offer://offer-uri", null)));
@@ -345,6 +348,9 @@ class IssuanceWorkflowImplTest {
                 .thenReturn(Mono.just("enriched-data-set"));
         when(statusListWorkflow.allocateEntry(any(), any(), anyString(), anyString(), eq(BASE_URL)))
                 .thenReturn(Mono.error(new IllegalStateException("QTSP unavailable")));
+        // Code-review W1: release is now attempted even when allocateEntry itself is what failed --
+        // a no-op in production (nothing was ever allocated), but still invoked, so it must be stubbed.
+        when(statusListWorkflow.releaseEntry(anyString())).thenReturn(Mono.empty());
         when(issuanceMetrics.startTimer()).thenReturn(Timer.start(new SimpleMeterRegistry()));
 
         StepVerifier.create(withTenant(workflow.issueCredential("p", request, "id-token", BEARER_TOKEN, BASE_URL, WALLET_URL)))
@@ -1666,6 +1672,41 @@ class IssuanceWorkflowImplTest {
         verify(credentialIssuedLogger).logFailed(eq(CONFIG_ID), any());
         verify(credentialIssuedLogger, never()).logIssued(any());
         verify(statusListWorkflow).releaseEntry(anyString());
+    }
+
+    /**
+     * Regression test for code-review W1: {@code injectCredentialStatus} runs right after a
+     * successful {@code allocateEntry}, between the two stages the original {@code onErrorResume}
+     * covered -- a malformed {@code enrichedDataSet} throwing there used to leak the entry
+     * {@code allocateEntry} had just reserved, because the release only wrapped
+     * {@code signCredential -> saveIssuance}.
+     */
+    @Test
+    void directDeliveryInjectCredentialStatusFailureShouldReleaseTheAllocatedEntry() {
+        JsonNode payload = new ObjectMapper().createObjectNode();
+        IssuanceRequest request = new IssuanceRequest(CONFIG_ID, payload, "direct", EMAIL, null);
+        CredentialProfile profile = profileWithoutCnf();
+        CredentialBuildResult buildResult = buildResult(Instant.now().minusSeconds(100));
+
+        when(credentialProfileRegistry.getByConfigurationId(CONFIG_ID)).thenReturn(profile);
+        when(payloadSchemaValidator.validate(CONFIG_ID, payload)).thenReturn(Mono.empty());
+        when(issuancePdpService.authorize(eq(CONFIG_ID), eq(payload), anyString())).thenReturn(Mono.empty());
+        when(genericCredentialBuilder.buildCredential(profile, payload)).thenReturn(Mono.just(buildResult));
+        when(genericCredentialBuilder.bindIssuer(eq(profile), anyString(), anyString(), eq(EMAIL)))
+                .thenReturn(Mono.just("enriched-data-set"));
+        when(statusListWorkflow.allocateEntry(any(), any(), anyString(), anyString(), eq(BASE_URL)))
+                .thenReturn(Mono.just(statusListEntry()));
+        when(genericCredentialBuilder.injectCredentialStatus(anyString(), any(), anyString()))
+                .thenThrow(new IllegalStateException("Failed to inject credentialStatus"));
+        when(statusListWorkflow.releaseEntry(anyString())).thenReturn(Mono.empty());
+        when(issuanceMetrics.startTimer()).thenReturn(Timer.start(new SimpleMeterRegistry()));
+
+        StepVerifier.create(withTenant(workflow.issueCredential("p", request, "id-token", BEARER_TOKEN, BASE_URL, WALLET_URL)))
+                .expectErrorMatches(e -> messageAppearsInCauseChain(e, "Failed to inject credentialStatus"))
+                .verify();
+
+        verify(statusListWorkflow).releaseEntry(anyString());
+        verifyNoInteractions(credentialSignerWorkflow);
     }
 
     @Test

@@ -9,7 +9,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.core.io.buffer.DefaultDataBufferFactory;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
@@ -23,10 +22,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static es.in2.issuer.backend.shared.domain.util.EndpointsConstants.ISSUANCES_PATH;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class IdempotencyFilterTest {
@@ -34,8 +33,6 @@ class IdempotencyFilterTest {
     private static final String IDEMPOTENCY_HEADER = "X-Idempotency-Key";
     private static final String TENANT_HEADER = "X-Tenant";
     private static final String BODY = "{\"signed_credential\":\"signed-jwt\"}";
-    private static final String TOKEN_ORG_A = "Bearer token-org-a";
-    private static final String TOKEN_ORG_B = "Bearer token-org-b";
 
     @Mock
     private IssuanceMetrics issuanceMetrics;
@@ -48,8 +45,10 @@ class IdempotencyFilterTest {
     @BeforeEach
     void setUp() {
         filter = new IdempotencyFilter(3600, issuanceMetrics, accessTokenService);
-        lenient().when(accessTokenService.getOrganizationId(eq(TOKEN_ORG_A))).thenReturn(Mono.just("org-a"));
-        lenient().when(accessTokenService.getOrganizationId(eq(TOKEN_ORG_B))).thenReturn(Mono.just("org-b"));
+        // Default: caller resolves to a single organization from the authenticated
+        // SecurityContext. Tests exercising organization-scoping or failure override this.
+        lenient().when(accessTokenService.getOrganizationIdFromCurrentSession())
+                .thenReturn(Mono.just("org-a"));
     }
 
     /** Chain that writes a fixed JSON body once and counts how many times it runs. */
@@ -76,7 +75,6 @@ class IdempotencyFilterTest {
         MockServerWebExchange first = MockServerWebExchange.from(
                 MockServerHttpRequest.post(ISSUANCES_PATH)
                         .header(IDEMPOTENCY_HEADER, key)
-                        .header(HttpHeaders.AUTHORIZATION, TOKEN_ORG_A)
                         .build());
         StepVerifier.create(filter.filter(first, chain)).verifyComplete();
         assertEquals(BODY, readBody(first));
@@ -84,7 +82,6 @@ class IdempotencyFilterTest {
         MockServerWebExchange second = MockServerWebExchange.from(
                 MockServerHttpRequest.post(ISSUANCES_PATH)
                         .header(IDEMPOTENCY_HEADER, key)
-                        .header(HttpHeaders.AUTHORIZATION, TOKEN_ORG_A)
                         .build());
         StepVerifier.create(filter.filter(second, chain)).verifyComplete();
 
@@ -105,7 +102,6 @@ class IdempotencyFilterTest {
                 MockServerHttpRequest.post(ISSUANCES_PATH)
                         .header(IDEMPOTENCY_HEADER, sharedKey)
                         .header("X-Tenant", "tenant-a")
-                        .header(HttpHeaders.AUTHORIZATION, TOKEN_ORG_A)
                         .build());
         StepVerifier.create(filter.filter(tenantA, chain)).verifyComplete();
 
@@ -113,7 +109,6 @@ class IdempotencyFilterTest {
                 MockServerHttpRequest.post(ISSUANCES_PATH)
                         .header(IDEMPOTENCY_HEADER, sharedKey)
                         .header("X-Tenant", "tenant-b")
-                        .header(HttpHeaders.AUTHORIZATION, TOKEN_ORG_A)
                         .build());
         StepVerifier.create(filter.filter(tenantB, chain)).verifyComplete();
 
@@ -130,12 +125,13 @@ class IdempotencyFilterTest {
         String sharedKey = "shared-idem-key";
         AtomicInteger invocations = new AtomicInteger();
         WebFilterChain chain = writingChain(invocations);
+        when(accessTokenService.getOrganizationIdFromCurrentSession())
+                .thenReturn(Mono.just("org-a"), Mono.just("org-b"));
 
         MockServerWebExchange orgA = MockServerWebExchange.from(
                 MockServerHttpRequest.post(ISSUANCES_PATH)
                         .header(IDEMPOTENCY_HEADER, sharedKey)
                         .header(TENANT_HEADER, "tenant-a")
-                        .header(HttpHeaders.AUTHORIZATION, TOKEN_ORG_A)
                         .build());
         StepVerifier.create(filter.filter(orgA, chain)).verifyComplete();
 
@@ -143,7 +139,6 @@ class IdempotencyFilterTest {
                 MockServerHttpRequest.post(ISSUANCES_PATH)
                         .header(IDEMPOTENCY_HEADER, sharedKey)
                         .header(TENANT_HEADER, "tenant-a")
-                        .header(HttpHeaders.AUTHORIZATION, TOKEN_ORG_B)
                         .build());
         StepVerifier.create(filter.filter(orgB, chain)).verifyComplete();
 
@@ -153,26 +148,13 @@ class IdempotencyFilterTest {
     }
 
     @Test
-    void missingAuthorizationHeader_bypassesCacheGracefully() {
-        AtomicInteger invocations = new AtomicInteger();
-        WebFilterChain chain = writingChain(invocations);
-
-        MockServerWebExchange first = MockServerWebExchange.from(
-                MockServerHttpRequest.post(ISSUANCES_PATH).header(IDEMPOTENCY_HEADER, "no-auth-key").build());
-        StepVerifier.create(filter.filter(first, chain)).verifyComplete();
-
-        MockServerWebExchange second = MockServerWebExchange.from(
-                MockServerHttpRequest.post(ISSUANCES_PATH).header(IDEMPOTENCY_HEADER, "no-auth-key").build());
-        StepVerifier.create(filter.filter(second, chain)).verifyComplete();
-
-        // No organization to scope the key by -- never cached, so downstream runs every time.
-        assertEquals(2, invocations.get());
-    }
-
-    @Test
-    void unresolvableToken_bypassesCacheGracefully() {
-        String key = "unresolvable-token-key";
-        lenient().when(accessTokenService.getOrganizationId(eq("Bearer garbage")))
+    void unresolvableSession_bypassesCacheGracefully() {
+        // Covers both a missing/anonymous SecurityContext and a session whose token cannot be
+        // resolved (W3, code-review): the organization now comes from the already-authenticated
+        // SecurityContext rather than a fresh, unverified parse of the Authorization header, so
+        // both cases collapse into the same "cannot resolve caller organization" fallback.
+        String key = "unresolvable-session-key";
+        when(accessTokenService.getOrganizationIdFromCurrentSession())
                 .thenReturn(Mono.error(new InvalidTokenException()));
         AtomicInteger invocations = new AtomicInteger();
         WebFilterChain chain = writingChain(invocations);
@@ -180,18 +162,16 @@ class IdempotencyFilterTest {
         MockServerWebExchange first = MockServerWebExchange.from(
                 MockServerHttpRequest.post(ISSUANCES_PATH)
                         .header(IDEMPOTENCY_HEADER, key)
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer garbage")
                         .build());
         StepVerifier.create(filter.filter(first, chain)).verifyComplete();
 
         MockServerWebExchange second = MockServerWebExchange.from(
                 MockServerHttpRequest.post(ISSUANCES_PATH)
                         .header(IDEMPOTENCY_HEADER, key)
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer garbage")
                         .build());
         StepVerifier.create(filter.filter(second, chain)).verifyComplete();
 
-        // A token that cannot be resolved must not crash the request nor be cached under a wrong key.
+        // A session that cannot be resolved must not crash the request nor be cached under a wrong key.
         assertEquals(2, invocations.get());
     }
 

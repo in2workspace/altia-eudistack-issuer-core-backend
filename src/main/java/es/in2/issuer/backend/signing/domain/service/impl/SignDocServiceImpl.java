@@ -135,8 +135,20 @@ public class SignDocServiceImpl implements SignDocService {
         String expectedLeafBase64 = (expectedCertificates == null || expectedCertificates.isEmpty())
                 ? null : expectedCertificates.getFirst();
 
-        if (expectedLeafBase64 == null
-                || !leaf.equals(X509CertUtils.parse(Base64.getDecoder().decode(expectedLeafBase64)))) {
+        X509Certificate expectedLeaf;
+        try {
+            expectedLeaf = expectedLeafBase64 == null
+                    ? null : X509CertUtils.parse(Base64.getDecoder().decode(expectedLeafBase64));
+        } catch (IllegalArgumentException ex) {
+            // W2 (code-review): certInfo.certificates() comes back from the QTSP (getCredentialInfo),
+            // not from the signed document itself -- invalid Base64 there is a malformed response, not
+            // a well-formed rejection, but it must still surface as SignatureProcessingException rather
+            // than an unmapped 500 (H1's closed error contract).
+            throw new SignatureProcessingException(
+                    "Could not parse the credential's own certificate", ex);
+        }
+
+        if (expectedLeaf == null || !leaf.equals(expectedLeaf)) {
             throw new SignatureProcessingException(
                     "Signed document's certificate does not match the credential's own certificate");
         }
@@ -150,6 +162,16 @@ public class SignDocServiceImpl implements SignDocService {
         } catch (JOSEException _) {
             throw new SignatureProcessingException(
                     "Error verifying the signed document's signature");
+        } catch (ClassCastException | IllegalArgumentException ex) {
+            // W2 (code-review): the leaf's actual key type can disagree with the JWS alg family
+            // (e.g. an RSA leaf under an ES256 header), which JWSAlgorithm.Family.contains does not
+            // rule out -- the cast in buildVerifier then throws ClassCastException, and the verifier
+            // constructors themselves throw IllegalArgumentException on a malformed key. Neither is a
+            // JOSEException, so both must be mapped here too or this leg breaks H1's closed error
+            // contract (a 500 instead of SignatureProcessingException) for what is still a rejection,
+            // never a bypass.
+            throw new SignatureProcessingException(
+                    "Error verifying the signed document's signature", ex);
         }
     }
 

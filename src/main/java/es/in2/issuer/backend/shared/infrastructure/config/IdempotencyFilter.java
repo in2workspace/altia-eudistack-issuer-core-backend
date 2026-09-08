@@ -9,7 +9,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.annotation.Order;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.core.io.buffer.DataBufferUtils;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.http.server.reactive.ServerHttpResponseDecorator;
@@ -69,18 +68,17 @@ public class IdempotencyFilter implements WebFilter {
         // tenant alone lets any organization within the same tenant collide on a shared or
         // predictable idempotency key and receive another organization's cached response --
         // including a directly-delivered signed credential (EUD-167), which exists nowhere else
-        // (it is never persisted, only cached here). The organization id is read straight from the
-        // bearer token rather than from a security context populated upstream, so this does not
-        // depend on this filter's position relative to the authentication filter chain. A request
-        // whose token cannot be resolved skips idempotency caching entirely instead of risking a
-        // wrong key -- it is rejected downstream on its own merits regardless.
-        String authorizationHeader = exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
-        if (authorizationHeader == null || authorizationHeader.isBlank()) {
-            return chain.filter(exchange);
-        }
-
+        // (it is never persisted, only cached here). The organization id is read from the
+        // already-authenticated SecurityContext (W3, code-review) rather than from a fresh,
+        // unverified parse of the raw Authorization header: this filter runs after Spring
+        // Security's chain regardless of its own @Order value today, but a manual JWT parse here
+        // would have stayed "safe by filter ordering" instead of safe by construction -- reading
+        // the SecurityContext instead means a forged/unverified token can never influence the
+        // cache key, whatever order the filters run in. A request whose session cannot be
+        // resolved skips idempotency caching entirely instead of risking a wrong key -- it is
+        // rejected downstream on its own merits regardless.
         String finalTenantScope = tenantScope;
-        return accessTokenService.getOrganizationId(authorizationHeader)
+        return accessTokenService.getOrganizationIdFromCurrentSession()
                 .flatMap(organizationId -> handleIdempotentRequest(
                         exchange, chain, finalTenantScope, organizationId, idempotencyKey))
                 .onErrorResume(ex -> {
