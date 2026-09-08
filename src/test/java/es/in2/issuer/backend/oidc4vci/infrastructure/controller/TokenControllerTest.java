@@ -13,10 +13,10 @@ import es.in2.issuer.backend.shared.infrastructure.controller.error.ErrorRespons
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.reactive.WebFluxTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.ReactiveAuthenticationManager;
 import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.web.reactive.function.BodyInserters;
 import reactor.core.publisher.Mono;
@@ -29,35 +29,35 @@ import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.reactive.server.SecurityMockServerConfigurers.csrf;
 
 @WithMockUser
-@MockBean(ReactiveAuthenticationManager.class)
+@MockitoBean(types = ReactiveAuthenticationManager.class)
 @WebFluxTest(TokenController.class)
 class TokenControllerTest {
 
-    @MockBean
+    @MockitoBean
     TokenService tokenService;
 
     @Autowired
     WebTestClient webTestClient;
 
-    @MockBean
+    @MockitoBean
     ErrorResponseFactory errorResponseFactory;
 
-    @MockBean
+    @MockitoBean
     NonceService nonceService;
 
-    @MockBean
+    @MockitoBean
     IssuanceMetrics issuanceMetrics;
 
-    @MockBean
+    @MockitoBean
     IssuerProperties issuerProperties;
 
-    @MockBean
+    @MockitoBean
     TenantRegistryService tenantRegistryService;
 
-    @MockBean
+    @MockitoBean
     es.in2.issuer.backend.shared.domain.spi.UrlResolver urlResolver;
 
-    @MockBean
+    @MockitoBean
     AccessTokenService accessTokenService;
 
     @Test
