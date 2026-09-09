@@ -24,6 +24,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`enabledConfigurationIds` (`PUT /admin/v1/credential-catalog`) is now bounded** (`@Size(max=64)` + `@Pattern`), mirroring the sibling `deliveryModesByConfigurationId` map fixed earlier — an id previously reached an unsanitized log line / RFC 9457 `detail` (F4). The two exception handlers this Story touches (`UnknownCredentialConfigurationException`, `CredentialConfigurationNotEnabledException`) no longer echo the raw exception message to the client (`handleSafe` instead of `handleWith`, F5).
 - **`findConfiguredDeliveryModes` now distinguishes "not enabled for this tenant" from "enabled but no delivery modes configured"** (F6) — previously both collapsed into the same empty result, and the issuance-eligibility resolver defaults an empty result to the schema ceiling; a type that was never enabled for a tenant could inherit ceiling eligibility instead of being refused. Fails closed with `409 credential_configuration_not_enabled` for a genuinely unenabled type.
 
+### Fixed (EUD-169 — tech-debt cleanup ahead of `/code-review`, TD-5/TD-6/TD-8)
+
+- The per-tenant delivery-modes cache now keys its "tenant absent" fallback on `Constants.SYSTEM_TENANT`, the same sentinel the connection factory already resolves `search_path` to (`public`), instead of an ad hoc `"unknown"` string that named nothing (TD-5).
+- `chk_tcp_delivery_modes` (`V13`) now only accepts the 7 canonical, deduplicated, alphabetically-sorted CSV forms of `direct`/`email`/`ui` — previously a syntactically valid but non-canonical value (a duplicate, or out of order) also passed (TD-6).
+- `TenantCredentialProfileRepository.deleteAllByCredentialConfigurationIdNotIn` now no-ops on an empty id set instead of reaching an engine-level `NOT IN ()` (TD-8) — unreachable via today's only caller, guarded for any future one.
+
 ## [3.8.0] - 2026-09-07
 
 ### Fixed
