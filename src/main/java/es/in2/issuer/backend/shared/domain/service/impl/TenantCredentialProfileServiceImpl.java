@@ -31,6 +31,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static es.in2.issuer.backend.shared.domain.util.Constants.SYSTEM_TENANT;
 import static es.in2.issuer.backend.shared.domain.util.Constants.TENANT_DOMAIN_CONTEXT_KEY;
 
 @Slf4j
@@ -270,10 +271,18 @@ public class TenantCredentialProfileServiceImpl implements TenantCredentialProfi
      * {@link #getCatalog()}, and {@code DeliveryEligibilityResolver} via
      * {@link #findConfiguredDeliveryModes}) fall back to the schema ceiling for (AD-8); an
      * absent key means "not enabled". {@code keySet()} of this map is exactly the enabled ids.
+     *
+     * <p>Security review (F10/TD-5): the cache key falls back to {@link
+     * es.in2.issuer.backend.shared.domain.util.Constants#SYSTEM_TENANT}, the same sentinel
+     * {@link es.in2.issuer.backend.shared.infrastructure.config.TenantAwareConnectionFactoryDecorator}
+     * uses for the identical fallback -- it is what the connection factory actually resolves
+     * the {@code search_path} to (the {@code public} schema) when the tenant is absent, so the
+     * cache key now names the real key space instead of an ad hoc string that corresponded to
+     * nothing.
      */
     private Mono<Map<String, Set<DeliveryMode>>> getTenantModesMap() {
         return Mono.deferContextual(ctx -> {
-            String tenant = ctx.getOrDefault(TENANT_DOMAIN_CONTEXT_KEY, "unknown");
+            String tenant = ctx.getOrDefault(TENANT_DOMAIN_CONTEXT_KEY, SYSTEM_TENANT);
             Map<String, Set<DeliveryMode>> cached = cache.getIfPresent(tenant);
             if (cached != null) {
                 return Mono.just(cached);
