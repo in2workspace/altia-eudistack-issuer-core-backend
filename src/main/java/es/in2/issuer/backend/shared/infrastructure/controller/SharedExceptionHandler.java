@@ -747,4 +747,22 @@ public class SharedExceptionHandler {
                 "The declared delivery mode is not eligible for this credential type"
         );
     }
+
+    // PATCH /admin/v1/credential-catalog (EUD-169, AD-13): the declared credential_configuration_id
+    // exists globally but is not enabled for this tenant -- a state conflict, not a malformed
+    // request, hence 409 rather than 400 (same divide AD-7 already drew for the schema ceiling).
+    @ExceptionHandler(CredentialConfigurationNotEnabledException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public Mono<GlobalErrorMessage> handleCredentialConfigurationNotEnabledException(
+            CredentialConfigurationNotEnabledException ex,
+            ServerHttpRequest request
+    ) {
+        return errors.handleWith(
+                ex, request,
+                GlobalErrorTypes.CREDENTIAL_CONFIGURATION_NOT_ENABLED.getCode(),
+                "Credential configuration not enabled",
+                HttpStatus.CONFLICT,
+                "The declared credential configuration id is not enabled for this tenant"
+        );
+    }
 }
