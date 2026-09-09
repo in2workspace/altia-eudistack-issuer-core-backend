@@ -1,6 +1,7 @@
 package es.in2.issuer.backend.shared.domain.service.impl;
 
 import es.in2.issuer.backend.shared.domain.exception.CredentialCatalogNotConfiguredException;
+import es.in2.issuer.backend.shared.domain.exception.CredentialConfigurationNotEnabledException;
 import es.in2.issuer.backend.shared.domain.model.dto.CredentialCatalogEntryDto;
 import es.in2.issuer.backend.shared.domain.model.entities.TenantCredentialProfile;
 import es.in2.issuer.backend.shared.domain.model.enums.DeliveryMode;
@@ -261,6 +262,54 @@ class CredentialCatalogTransactionalIT extends PostgresIntegrationBase {
                 .get().uri("/api/v1/backoffice/delivery-config/" + configId)
                 .exchange()
                 .expectStatus().isNotFound();
+    }
+
+    /**
+     * ES-10, against a real DB: a declared credential_configuration_id known to the
+     * registry but not currently enabled for the tenant is rejected atomically -- and
+     * because the write is a plain {@code UPDATE} (AD-14), there is structurally nothing
+     * to roll back: the row count stays at zero, the type is not silently enabled as a
+     * side effect of the failed PATCH.
+     *
+     * <p>Tests only one credential_configuration_id: the registry backing this
+     * integration test exposes a single real profile fixture (see TD-2, same limitation
+     * already documented for {@link #concurrentUpdates_sameTenant_leaveNoDuplicateRows}),
+     * so a payload mixing an enabled id with a distinct not-enabled one cannot be built
+     * here. The multi-id sequential-abort behavior (some ids enabled, one not, zero
+     * writes for any of them) is covered at the unit level instead
+     * ({@code TenantCredentialProfileServiceImplTest#updateDeliveryModes_oneIdNotEnabled_rejectsAndWritesNothingElse}) --
+     * see tech-debt.md TD-4.
+     */
+    @Test
+    void updateDeliveryModes_ccidNotEnabled_rejectsAndCreatesNoRow() {
+        StepVerifier.create(service.updateDeliveryModes(Map.of(configId, Set.of(DeliveryMode.EMAIL)))
+                        .contextWrite(ctx(TENANT_A)))
+                .expectError(CredentialConfigurationNotEnabledException.class)
+                .verify();
+
+        List<TenantCredentialProfile> rows =
+                repository.findAllByEnabledTrue().collectList().contextWrite(ctx(TENANT_A)).block();
+        assertThat(rows).isEmpty();
+    }
+
+    /**
+     * EC-10, against a real DB: a successful PATCH on an already-enabled catalog leaves
+     * the set of enabled types and the row count exactly as they were -- the point
+     * adjustment is a pure {@code UPDATE} on the existing row, never an insert or a
+     * prune.
+     */
+    @Test
+    void updateDeliveryModes_success_leavesEnabledSetAndRowCountUnchanged() {
+        service.updateCatalog(Set.of(configId)).contextWrite(ctx(TENANT_A)).block();
+
+        service.updateDeliveryModes(Map.of(configId, Set.of(DeliveryMode.EMAIL, DeliveryMode.UI)))
+                .contextWrite(ctx(TENANT_A)).block();
+
+        List<TenantCredentialProfile> rows =
+                repository.findAllByEnabledTrue().collectList().contextWrite(ctx(TENANT_A)).block();
+        assertThat(rows).extracting(TenantCredentialProfile::credentialConfigurationId)
+                .containsExactly(configId);
+        assertThat(rows.getFirst().deliveryModes()).isEqualTo("email,ui");
     }
 
     private CredentialCatalogEntryDto entry(List<CredentialCatalogEntryDto> catalog) {
