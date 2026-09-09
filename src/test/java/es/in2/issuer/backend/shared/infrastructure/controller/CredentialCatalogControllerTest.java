@@ -29,6 +29,7 @@ import reactor.core.publisher.Mono;
 import java.util.List;
 
 import static es.in2.issuer.backend.shared.domain.util.EndpointsConstants.CREDENTIAL_CATALOG_PATH;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -84,18 +85,120 @@ class CredentialCatalogControllerTest {
                 .jsonPath("$[0].enabled").isEqualTo(true);
     }
 
+    /**
+     * AD-16 (2026-09-08 (2)): the operator (LEAR) can now read the catalog to discover a
+     * type's eligible delivery modes and schema ceiling before attempting to issue it --
+     * the single test in this whole Story whose intent inverts (it used to assert 403).
+     */
     @Test
-    void getCatalog_asLear_returns403AndDoesNotReadCatalog() {
+    void getCatalog_asLear_returns200AndReadsCatalog() {
         when(accessTokenService.getAuthorizationContext(anyString()))
                 .thenReturn(Mono.just(lear()));
+        when(tenantCredentialProfileService.getCatalog())
+                .thenReturn(Mono.just(List.of(
+                        new CredentialCatalogEntryDto("learcredential.employee.w3c.4", "Employee", true, List.of(), List.of()))));
 
         webTestClient.get()
                 .uri(CREDENTIAL_CATALOG_PATH)
                 .header("Authorization", "Bearer token")
                 .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$[0].credentialConfigurationId").isEqualTo("learcredential.employee.w3c.4");
+
+        verify(tenantCredentialProfileService).getCatalog();
+    }
+
+    /**
+     * AC-12: the operator's read carries the same eligible-modes/schema-ceiling
+     * enrichment as the administrator's, so it can guide the operator's delivery-mode
+     * choice before issuance.
+     */
+    @Test
+    void getCatalog_asLear_returns200WithDeliveryModesAndSchemaCeiling() {
+        when(accessTokenService.getAuthorizationContext(anyString()))
+                .thenReturn(Mono.just(lear()));
+        when(tenantCredentialProfileService.getCatalog())
+                .thenReturn(Mono.just(List.of(
+                        new CredentialCatalogEntryDto("learcredential.employee.w3c.4", "Employee", true,
+                                List.of("email", "ui"), List.of("email", "ui")))));
+
+        webTestClient.get()
+                .uri(CREDENTIAL_CATALOG_PATH)
+                .header("Authorization", "Bearer token")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$[0].deliveryModes[0]").isEqualTo("email")
+                .jsonPath("$[0].schemaEligibleModes[0]").isEqualTo("email");
+    }
+
+    /**
+     * EC-12: the same tenant state produces an identical payload for the administrator
+     * and for the operator -- eligibility does not depend on who is asking.
+     */
+    @Test
+    void getCatalog_sameStateAsAdminAndAsLear_returnsIdenticalPayload() {
+        List<CredentialCatalogEntryDto> catalog = List.of(
+                new CredentialCatalogEntryDto("learcredential.employee.w3c.4", "Employee", true,
+                        List.of("email", "ui"), List.of("email", "ui")));
+        when(tenantCredentialProfileService.getCatalog()).thenReturn(Mono.just(catalog));
+
+        when(accessTokenService.getAuthorizationContext(anyString())).thenReturn(Mono.just(admin()));
+        byte[] adminBody = webTestClient.get()
+                .uri(CREDENTIAL_CATALOG_PATH)
+                .header("Authorization", "Bearer token")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody().returnResult().getResponseBody();
+
+        when(accessTokenService.getAuthorizationContext(anyString())).thenReturn(Mono.just(lear()));
+        byte[] learBody = webTestClient.get()
+                .uri(CREDENTIAL_CATALOG_PATH)
+                .header("Authorization", "Bearer token")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody().returnResult().getResponseBody();
+
+        assertThat(adminBody).isEqualTo(learBody);
+    }
+
+    /**
+     * ES-11: the read gate opening to the operator (AD-16) must never reach the write
+     * path -- the PATCH added by this same delta is denied exactly like the PUT.
+     */
+    @Test
+    void patchDeliveryModes_asLear_returns403AndDoesNotReachService_operatorReadDelta() {
+        when(accessTokenService.getAuthorizationContext(anyString()))
+                .thenReturn(Mono.just(lear()));
+
+        webTestClient.mutateWith(csrf())
+                .patch()
+                .uri(CREDENTIAL_CATALOG_PATH)
+                .header("Authorization", "Bearer token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"deliveryModesByConfigurationId\":{\"learcredential.employee.w3c.4\":[\"email\"]}}")
+                .exchange()
                 .expectStatus().isForbidden();
 
-        verify(tenantCredentialProfileService, never()).getCatalog();
+        verify(tenantCredentialProfileService, never()).updateDeliveryModes(any());
+    }
+
+    /**
+     * AD-16 / R-13: {@code UserRole} has exactly three values today, which is what makes
+     * {@code canReadCredentialCatalog()}'s explicit role check vacuously true. This test
+     * exists to go red the moment a fourth value is added, forcing a conscious decision
+     * about whether it can read the catalog instead of it inheriting access silently.
+     */
+    @Test
+    void canReadCredentialCatalog_allThreeRolesPass_exhaustivenessTripwire() {
+        assertThat(UserRole.values()).hasSize(3);
+        for (UserRole role : UserRole.values()) {
+            AuthorizationContext ctx = new AuthorizationContext("org-1", role, false, "tenant");
+            assertThat(ctx.canReadCredentialCatalog())
+                    .as("role %s must pass canReadCredentialCatalog()", role)
+                    .isTrue();
+        }
     }
 
     /**
