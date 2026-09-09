@@ -88,6 +88,16 @@ public class AccessTokenServiceImpl implements AccessTokenService {
         });
     }
 
+    @Override
+    public Mono<String> getTokenTenant(String authorizationHeader) {
+        return getCleanBearerToken(authorizationHeader)
+                .flatMap(token -> Mono.fromCallable(() -> {
+                    JsonNode root = parseTokenPayload(token);
+                    JsonNode tenantNode = root.get("tenant");
+                    return tenantNode != null && !tenantNode.isNull() ? tenantNode.asText() : null;
+                }).onErrorMap(e -> e instanceof InvalidTokenException ? e : new InvalidTokenException()));
+    }
+
     private record TokenInfo(JsonNode root, String orgId) {}
 
     private Mono<UserRole> resolveRole(JsonNode root, String orgId) {

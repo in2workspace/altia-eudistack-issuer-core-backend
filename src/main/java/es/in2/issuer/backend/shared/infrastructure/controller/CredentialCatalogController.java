@@ -1,6 +1,7 @@
 package es.in2.issuer.backend.shared.infrastructure.controller;
 
 import es.in2.issuer.backend.shared.domain.exception.InvalidDeliveryConfigException;
+import es.in2.issuer.backend.shared.domain.exception.TenantMismatchException;
 import es.in2.issuer.backend.shared.domain.model.dto.AuthorizationContext;
 import es.in2.issuer.backend.shared.domain.model.dto.CredentialCatalogEntryDto;
 import es.in2.issuer.backend.shared.domain.model.dto.UpdateCredentialCatalogRequest;
@@ -50,6 +51,10 @@ import static es.in2.issuer.backend.shared.domain.util.EndpointsConstants.CREDEN
  *         read side can never relax the write side as a side effect.</li>
  * </ul>
  *
+ * <p>Both gates additionally require the access token's own {@code tenant} claim to match
+ * the resolved tenant ({@link #requireTenantMatch}), except for SysAdmin, which is expected
+ * to act across tenants (security review, EUD-169, S1).
+ *
  * <p>An empty catalog is not a valid state: <b>PUT</b> with an empty
  * {@code enabledConfigurationIds} is rejected (400, bean validation) and <b>GET</b> answers
  * 404 when the tenant has no enabled configuration at all.
@@ -63,6 +68,8 @@ public class CredentialCatalogController {
     private static final String AUDIT_RESOURCE_TYPE = "credential-catalog";
     private static final String ACTION_REPLACE_CATALOG = "replace_catalog";
     private static final String ACTION_PATCH_DELIVERY_MODES = "patch_delivery_modes";
+    private static final String AUDIT_EVENT_TENANT_BREACH = "tenant_isolation_breach";
+    private static final String AUDIT_EVENT_AUTHZ_DENY = "authorization.deny";
 
     private final AccessTokenService accessTokenService;
     private final TenantCredentialProfileService tenantCredentialProfileService;
@@ -166,10 +173,14 @@ public class CredentialCatalogController {
         return accessTokenService.getAuthorizationContext(authorizationHeader)
                 .flatMap(ctx -> {
                     if (!ctx.canReadCredentialCatalog()) {
-                        return Mono.error(new ResponseStatusException(
-                                HttpStatus.FORBIDDEN, "Tenant administrator, SysAdmin or operator role required"));
+                        // Unreachable today -- UserRole has exactly three values and all three
+                        // pass canReadCredentialCatalog() (see its javadoc / the exhaustiveness
+                        // tripwire test). Kept audited so a future fourth role's denial is not
+                        // silently invisible the day this stops being vacuous.
+                        return auditDenyThenForbid(ctx, "read_catalog",
+                                "Tenant administrator, SysAdmin or operator role required");
                     }
-                    return Mono.just(ctx);
+                    return requireTenantMatch(ctx, authorizationHeader);
                 });
     }
 
@@ -184,10 +195,57 @@ public class CredentialCatalogController {
         return accessTokenService.getAuthorizationContext(authorizationHeader)
                 .flatMap(ctx -> {
                     if (!ctx.isTenantAdmin() || !ctx.canWrite()) {
-                        return Mono.error(new ResponseStatusException(
-                                HttpStatus.FORBIDDEN, "Tenant administrator role with write access required"));
+                        return auditDenyThenForbid(ctx, "write_catalog",
+                                "Tenant administrator role with write access required");
                     }
-                    return Mono.just(ctx);
+                    return requireTenantMatch(ctx, authorizationHeader);
                 });
+    }
+
+    /**
+     * Security review (EUD-169, S1): the tenant is resolved from {@code X-Tenant}/the
+     * request host ({@code TenantDomainWebFilter}), a value the caller controls, while the
+     * access token's own {@code tenant} claim is never cross-checked against it -- a caller
+     * holding a valid token for their own tenant could read or write another tenant's
+     * catalog by sending a different {@code X-Tenant}. SAD §8.6/§8.7 step 5 mandates this
+     * check for every backend; this closes it for the catalog specifically (scoped fix --
+     * {@code IssuanceController}/{@code MeController} share the same gap via
+     * {@code AccessTokenServiceImpl.getAuthorizationContext()} and are tracked separately,
+     * TDG-21).
+     *
+     * <p>SysAdmin is exempted, not by omission: a SysAdmin's own token legitimately carries
+     * a different tenant (typically {@code platform}) than the tenant they administer via
+     * {@code X-Tenant} -- that is the accepted cross-tenant convention already used
+     * elsewhere (e.g. {@code RequirePowerRule}'s sysAdmin bypass, TDG-18), not something
+     * this check should break.
+     */
+    private Mono<AuthorizationContext> requireTenantMatch(AuthorizationContext ctx, String authorizationHeader) {
+        if (ctx.isSysAdmin()) {
+            return Mono.just(ctx);
+        }
+        return Mono.deferContextual(reactorCtx -> {
+            String tenantDomain = reactorCtx.getOrDefault(TENANT_DOMAIN_CONTEXT_KEY, "unknown");
+            return accessTokenService.getTokenTenant(authorizationHeader)
+                    .defaultIfEmpty("")
+                    .flatMap(tokenTenant -> {
+                        if (tokenTenant.isBlank() || !tokenTenant.equalsIgnoreCase(tenantDomain)) {
+                            auditService.auditFailure(AUDIT_EVENT_TENANT_BREACH, ctx.organizationIdentifier(),
+                                    "token_tenant_mismatch",
+                                    Map.of("tokenTenant", tokenTenant, "resolvedTenant", tenantDomain));
+                            return Mono.error(new TenantMismatchException(
+                                    "Token tenant '" + tokenTenant + "' does not match tenant header '" + tenantDomain + "'"));
+                        }
+                        return Mono.just(ctx);
+                    });
+        });
+    }
+
+    private Mono<AuthorizationContext> auditDenyThenForbid(AuthorizationContext ctx, String action, String message) {
+        return Mono.deferContextual(reactorCtx -> {
+            String tenant = reactorCtx.getOrDefault(TENANT_DOMAIN_CONTEXT_KEY, "unknown");
+            auditService.auditFailure(AUDIT_EVENT_AUTHZ_DENY, ctx.organizationIdentifier(), "role_not_permitted",
+                    Map.of("tenant", tenant, "action", action));
+            return Mono.<AuthorizationContext>error(new ResponseStatusException(HttpStatus.FORBIDDEN, message));
+        });
     }
 }

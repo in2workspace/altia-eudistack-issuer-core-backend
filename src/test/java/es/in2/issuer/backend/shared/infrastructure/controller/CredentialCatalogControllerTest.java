@@ -15,6 +15,7 @@ import es.in2.issuer.backend.shared.domain.service.TenantCredentialProfileServic
 import es.in2.issuer.backend.shared.domain.service.TenantRegistryService;
 import es.in2.issuer.backend.shared.infrastructure.config.IssuanceMetrics;
 import es.in2.issuer.backend.shared.infrastructure.controller.error.ErrorResponseFactory;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.reactive.WebFluxTest;
@@ -66,6 +67,18 @@ class CredentialCatalogControllerTest {
 
     @MockitoBean
     private TenantRegistryService tenantRegistryService;
+
+    /**
+     * Default stub for the tenant-match gate (security review, EUD-169, S1): this slice test
+     * has no {@code TenantDomainWebFilter}, so the resolved tenant defaults to {@code
+     * "unknown"} ({@code TENANT_DOMAIN_CONTEXT_KEY}'s fallback) -- matching it here keeps
+     * every pre-existing test passing without asserting anything about tenant matching.
+     * Tests that care about the mismatch override this per-test.
+     */
+    @BeforeEach
+    void stubTokenTenantMatchesDefault() {
+        when(accessTokenService.getTokenTenant(anyString())).thenReturn(Mono.just("unknown"));
+    }
 
     @Test
     void getCatalog_asTenantAdmin_returns200WithEntries() {
@@ -643,6 +656,120 @@ class CredentialCatalogControllerTest {
                 .expectStatus().isForbidden();
 
         verify(tenantCredentialProfileService, never()).updateDeliveryModes(any());
+    }
+
+    // --- Tenant-match tests (security review, EUD-169, S1) ---
+
+    @Test
+    void getCatalog_asLear_tenantMismatch_returns403AndAuditsBreach() {
+        when(accessTokenService.getAuthorizationContext(anyString()))
+                .thenReturn(Mono.just(lear()));
+        when(accessTokenService.getTokenTenant(anyString()))
+                .thenReturn(Mono.just("other-tenant"));
+
+        webTestClient.get()
+                .uri(CREDENTIAL_CATALOG_PATH)
+                .header("Authorization", "Bearer token")
+                .exchange()
+                .expectStatus().isForbidden();
+
+        verify(tenantCredentialProfileService, never()).getCatalog();
+        verify(auditService).auditFailure(eq("tenant_isolation_breach"), eq("org-1"), anyString(), any());
+    }
+
+    @Test
+    void getCatalog_asSysAdmin_tenantMismatch_stillReturns200() {
+        when(accessTokenService.getAuthorizationContext(anyString()))
+                .thenReturn(Mono.just(readOnlyAdmin()));
+        when(tenantCredentialProfileService.getCatalog())
+                .thenReturn(Mono.just(List.of(
+                        new CredentialCatalogEntryDto("learcredential.employee.w3c.4", "Employee", true, List.of(), List.of()))));
+
+        webTestClient.get()
+                .uri(CREDENTIAL_CATALOG_PATH)
+                .header("Authorization", "Bearer token")
+                .exchange()
+                .expectStatus().isOk();
+
+        // SysAdmin bypasses the tenant-match check entirely -- never even reads the claim.
+        verify(accessTokenService, never()).getTokenTenant(anyString());
+    }
+
+    @Test
+    void updateCatalog_asTenantAdmin_tenantMismatch_returns403AndDoesNotWrite() {
+        when(accessTokenService.getAuthorizationContext(anyString()))
+                .thenReturn(Mono.just(admin()));
+        when(accessTokenService.getTokenTenant(anyString()))
+                .thenReturn(Mono.just("other-tenant"));
+
+        webTestClient.mutateWith(csrf())
+                .put()
+                .uri(CREDENTIAL_CATALOG_PATH)
+                .header("Authorization", "Bearer token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"enabledConfigurationIds\":[\"learcredential.employee.w3c.4\"]}")
+                .exchange()
+                .expectStatus().isForbidden();
+
+        verify(tenantCredentialProfileService, never()).updateCatalog(any(), any());
+        verify(auditService).auditFailure(eq("tenant_isolation_breach"), eq("org-1"), anyString(), any());
+    }
+
+    @Test
+    void updateCatalog_asSysAdmin_tenantMismatch_stillWrites() {
+        AuthorizationContext sysAdminActingCrossTenant = new AuthorizationContext("org-1", UserRole.SYSADMIN, false, "tenant");
+        when(accessTokenService.getAuthorizationContext(anyString()))
+                .thenReturn(Mono.just(sysAdminActingCrossTenant));
+        when(tenantCredentialProfileService.updateCatalog(any(), any()))
+                .thenReturn(Mono.empty());
+
+        webTestClient.mutateWith(csrf())
+                .put()
+                .uri(CREDENTIAL_CATALOG_PATH)
+                .header("Authorization", "Bearer token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"enabledConfigurationIds\":[\"learcredential.employee.w3c.4\"]}")
+                .exchange()
+                .expectStatus().isOk();
+
+        verify(tenantCredentialProfileService).updateCatalog(any(), any());
+        verify(accessTokenService, never()).getTokenTenant(anyString());
+    }
+
+    // --- Authorization-denial audit tests (security review, EUD-169, F3) ---
+
+    @Test
+    void updateCatalog_asLear_deniedWriteIsAudited() {
+        when(accessTokenService.getAuthorizationContext(anyString()))
+                .thenReturn(Mono.just(lear()));
+
+        webTestClient.mutateWith(csrf())
+                .put()
+                .uri(CREDENTIAL_CATALOG_PATH)
+                .header("Authorization", "Bearer token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"enabledConfigurationIds\":[\"learcredential.employee.w3c.4\"]}")
+                .exchange()
+                .expectStatus().isForbidden();
+
+        verify(auditService).auditFailure(eq("authorization.deny"), eq("org-1"), anyString(), any());
+    }
+
+    @Test
+    void updateCatalog_asReadOnlyAdmin_deniedWriteIsAudited() {
+        when(accessTokenService.getAuthorizationContext(anyString()))
+                .thenReturn(Mono.just(readOnlyAdmin()));
+
+        webTestClient.mutateWith(csrf())
+                .put()
+                .uri(CREDENTIAL_CATALOG_PATH)
+                .header("Authorization", "Bearer token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"enabledConfigurationIds\":[\"learcredential.employee.w3c.4\"]}")
+                .exchange()
+                .expectStatus().isForbidden();
+
+        verify(auditService).auditFailure(eq("authorization.deny"), eq("org-1"), anyString(), any());
     }
 
     private static AuthorizationContext admin() {
