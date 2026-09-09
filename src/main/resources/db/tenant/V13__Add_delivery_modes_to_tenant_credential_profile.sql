@@ -61,7 +61,12 @@ BEGIN
     END IF;
 END $$;
 
--- 4) Invariante de forma a nivel de datos, tras el backfill
+-- 4) Invariante de forma a nivel de datos, tras el backfill. Enumera exactamente los 7
+--    subconjuntos no vacíos de {direct,email,ui} en orden alfabético y sin duplicados --
+--    la misma forma canónica que DeliveryMode.toCanonicalCsv produce siempre antes de
+--    escribir (código review, TD-6): un CSV sintácticamente válido pero no canónico
+--    (duplicado, o en otro orden) nunca debería llegar aquí, y ahora la propia BD lo
+--    garantiza en vez de solo la capa de aplicación.
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_constraint
@@ -70,6 +75,8 @@ BEGIN
         ALTER TABLE tenant_credential_profile
             ADD CONSTRAINT chk_tcp_delivery_modes
             CHECK (delivery_modes IS NULL
-                   OR delivery_modes ~ '^(direct|email|ui)(,(direct|email|ui))*$');
+                   OR delivery_modes IN ('direct', 'email', 'ui',
+                                          'direct,email', 'direct,ui', 'email,ui',
+                                          'direct,email,ui'));
     END IF;
 END $$;
