@@ -46,4 +46,21 @@ public interface TenantCredentialProfileRepository extends ReactiveCrudRepositor
            """)
     Mono<Integer> deleteAllByCredentialConfigurationIdNotIn(Set<String> ids);
 
+    /**
+     * Updates only the {@code delivery_modes} column of a single, already-enabled row --
+     * an {@code UPDATE}, never an {@code UPSERT} (AD-14): a statement that cannot insert
+     * cannot enable a type as a side effect. Returns {@code 0} when the id is unknown to
+     * this tenant's schema or currently disabled, which the caller (service layer) turns
+     * into {@code CredentialConfigurationNotEnabledException} (ES-10).
+     */
+    @Modifying
+    @Query("""
+           UPDATE tenant_credential_profile
+              SET delivery_modes = :deliveryModes,
+                  updated_at     = :updatedAt
+            WHERE credential_configuration_id = :credentialConfigurationId
+              AND enabled = true
+           """)
+    Mono<Integer> updateDeliveryModesIfEnabled(String credentialConfigurationId, String deliveryModes, Instant updatedAt);
+
 }
