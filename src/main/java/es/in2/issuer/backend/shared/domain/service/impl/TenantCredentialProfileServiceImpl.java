@@ -86,13 +86,24 @@ public class TenantCredentialProfileServiceImpl implements TenantCredentialProfi
      * ({@link es.in2.issuer.backend.shared.domain.service.DeliveryEligibilityResolver} on the
      * issuance path) and must fail closed rather than silently resolve against {@code public}
      * schema (security review, EUD-169).
+     *
+     * <p>Security review (F6): a type not enabled for this tenant errors with
+     * {@link CredentialConfigurationNotEnabledException} instead of emitting an empty
+     * {@code Set} -- an empty value means "enabled, but no delivery modes configured, default
+     * to the schema ceiling" (AD-8); collapsing "not enabled at all" into that same empty value
+     * let an unenabled type inherit the ceiling instead of being refused.
+     * {@link es.in2.issuer.backend.shared.domain.service.DeliveryEligibilityResolver} already
+     * propagates any error untouched (ES-09, fail-closed), so no caller change was needed.
      */
     @Override
     public Mono<Set<DeliveryMode>> findConfiguredDeliveryModes(String credentialConfigurationId) {
         return Mono.deferContextual(ctx -> {
             requireTenant(ctx);
             return getTenantModesMap()
-                    .map(modesMap -> modesMap.getOrDefault(credentialConfigurationId, Set.of()));
+                    .flatMap(modesMap -> modesMap.containsKey(credentialConfigurationId)
+                            ? Mono.just(modesMap.get(credentialConfigurationId))
+                            : Mono.error(new CredentialConfigurationNotEnabledException(
+                                    "Credential configuration id '" + credentialConfigurationId + "' is not enabled for this tenant")));
         });
     }
 

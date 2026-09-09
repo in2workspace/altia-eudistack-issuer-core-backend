@@ -35,10 +35,13 @@ public class DeliveryEligibilityResolver {
         // own must still see that failure as an onError signal, not an assembly-time exception.
         return Mono.fromSupplier(() -> schemaDeliveryCeiling.resolveEligibleModes(credentialConfigurationId))
                 .flatMap(ceiling -> tenantCredentialProfileService.findConfiguredDeliveryModes(credentialConfigurationId)
-                        // findConfiguredDeliveryModes (AD-8) always emits -- an empty Set IS the "not
-                        // configured" sentinel, never an empty Mono, so the fallback to the ceiling must
-                        // branch on Set emptiness here, not on Mono#switchIfEmpty (which would never fire
-                        // and would incorrectly return an empty result instead of the ceiling, EC-09 vs P-1).
+                        // findConfiguredDeliveryModes emits an empty Set for "enabled but unconfigured"
+                        // (AD-8 sentinel, defaults to the ceiling below) -- never an empty Mono for that
+                        // case, so the ceiling fallback branches on Set emptiness here, not on
+                        // Mono#switchIfEmpty (which would never fire and would incorrectly return an
+                        // empty result instead of the ceiling, EC-09 vs P-1). A genuinely not-enabled
+                        // type instead errors (security review, F6) and propagates untouched here --
+                        // fail-closed, no onErrorReturn/onErrorResume.
                         .map(configured -> configured.isEmpty()
                                 ? ceiling
                                 : configured.stream()

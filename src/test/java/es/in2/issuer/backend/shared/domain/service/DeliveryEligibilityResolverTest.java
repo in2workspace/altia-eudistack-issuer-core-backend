@@ -123,5 +123,23 @@ class DeliveryEligibilityResolverTest {
                     .expectError(IllegalStateException.class)
                     .verify();
         }
+
+        /**
+         * Security review (F6): findConfiguredDeliveryModes now errors for a type that is not
+         * enabled at all, instead of emitting an empty Set that this resolver would otherwise
+         * default to the ceiling. Confirms the resolver applies no onErrorReturn/onErrorResume
+         * of its own -- the error must reach the issuance caller untouched (ES-09).
+         */
+        @Test
+        void resolveEligibleModes_typeNotEnabled_signalsOnErrorRatherThanDefaultingToCeiling() {
+            when(schemaDeliveryCeiling.resolveEligibleModes(UNBOUND)).thenReturn(ALL_MODES);
+            when(tenantCredentialProfileService.findConfiguredDeliveryModes(UNBOUND))
+                    .thenReturn(Mono.error(new es.in2.issuer.backend.shared.domain.exception.CredentialConfigurationNotEnabledException(
+                            "Credential configuration id '" + UNBOUND + "' is not enabled for this tenant")));
+
+            StepVerifier.create(resolver.resolveEligibleModes(UNBOUND))
+                    .expectError(es.in2.issuer.backend.shared.domain.exception.CredentialConfigurationNotEnabledException.class)
+                    .verify();
+        }
     }
 }

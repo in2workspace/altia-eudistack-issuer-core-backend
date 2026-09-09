@@ -29,10 +29,18 @@ import java.util.Set;
  * being echoed into an error message) or a {@code null} value reach a log line / RFC-9457
  * {@code detail} unsanitized. The registry today holds ~7 profiles and a request declares
  * at most 3 delivery modes (direct/email/ui); the bounds below are generous, not tight.
+ * {@code enabledConfigurationIds} carries the same bound (F4, second pass): it was left
+ * unbounded when the sibling map was first fixed, reaching {@code UnknownCredentialConfigurationException}'s
+ * message (and its log line) unsanitized the same way.
  */
 public record UpdateCredentialCatalogRequest(
         @NotEmpty(message = "enabledConfigurationIds must not be empty")
-        Set<String> enabledConfigurationIds,
+        @Size(max = 64, message = "enabledConfigurationIds must declare at most 64 credential configuration ids")
+        Set<
+                @Pattern(regexp = "^[a-zA-Z0-9._-]{1,128}$",
+                        message = "credential_configuration_id must be 1-128 characters, letters/digits/./_/- only")
+                String
+        > enabledConfigurationIds,
 
         @Size(max = 32, message = "deliveryModesByConfigurationId must declare at most 32 credential configuration ids")
         Map<

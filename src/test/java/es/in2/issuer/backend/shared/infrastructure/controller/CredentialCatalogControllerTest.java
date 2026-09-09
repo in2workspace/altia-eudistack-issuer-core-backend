@@ -518,6 +518,46 @@ class CredentialCatalogControllerTest {
         verify(tenantCredentialProfileService, never()).updateCatalog(any(), any());
     }
 
+    // ---- enabledConfigurationIds bounds (security review, F4) -------------------
+
+    @Test
+    void updateCatalog_invalidEnabledConfigurationId_returns400WithoutCallingService() {
+        when(accessTokenService.getAuthorizationContext(anyString()))
+                .thenReturn(Mono.just(admin()));
+
+        webTestClient.mutateWith(csrf())
+                .put()
+                .uri(CREDENTIAL_CATALOG_PATH)
+                .header("Authorization", "Bearer token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"enabledConfigurationIds\":[\"bad id with spaces\"]}")
+                .exchange()
+                .expectStatus().isBadRequest();
+
+        verify(tenantCredentialProfileService, never()).updateCatalog(any(), any());
+    }
+
+    @Test
+    void updateCatalog_tooManyEnabledConfigurationIds_returns400WithoutCallingService() {
+        when(accessTokenService.getAuthorizationContext(anyString()))
+                .thenReturn(Mono.just(admin()));
+
+        String tooMany = java.util.stream.IntStream.rangeClosed(1, 65)
+                .mapToObj(i -> "\"type." + i + "\"")
+                .collect(java.util.stream.Collectors.joining(",", "[", "]"));
+
+        webTestClient.mutateWith(csrf())
+                .put()
+                .uri(CREDENTIAL_CATALOG_PATH)
+                .header("Authorization", "Bearer token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"enabledConfigurationIds\":" + tooMany + "}")
+                .exchange()
+                .expectStatus().isBadRequest();
+
+        verify(tenantCredentialProfileService, never()).updateCatalog(any(), any());
+    }
+
     // ---- PATCH /admin/v1/credential-catalog (AC-11) ----------------------------
 
     @Test

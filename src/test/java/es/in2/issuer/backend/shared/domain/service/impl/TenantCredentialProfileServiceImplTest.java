@@ -278,6 +278,23 @@ class TenantCredentialProfileServiceImplTest {
     }
 
     /**
+     * Security review (F6): a type that is not enabled at all (absent from
+     * findAllByEnabledTrue()) must not be collapsed into the same empty Set as "enabled but
+     * unconfigured" (see the passing test above) -- DeliveryEligibilityResolver would default
+     * that to the schema ceiling, letting an unenabled type inherit eligibility instead of
+     * being refused.
+     */
+    @Test
+    void findConfiguredDeliveryModes_notEnabledAtAll_errorsWithNotEnabled() {
+        when(repository.findAllByEnabledTrue()).thenReturn(Flux.just(row("A", "direct,email")));
+
+        StepVerifier.create(service.findConfiguredDeliveryModes("unknown-or-not-enabled")
+                        .contextWrite(Context.of(TENANT_DOMAIN_CONTEXT_KEY, TENANT)))
+                .expectError(CredentialConfigurationNotEnabledException.class)
+                .verify();
+    }
+
+    /**
      * Security review (EUD-169): unlike getEnabledConfigurationIds() (tolerant, read by public
      * metadata), this feeds an issuance-time security decision and must fail closed rather than
      * silently resolve against the "unknown"/public schema.

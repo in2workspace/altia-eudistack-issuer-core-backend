@@ -535,13 +535,16 @@ public class SharedExceptionHandler {
         );
     }
 
+    // Security review (F4): handleSafe, not handleWith -- ex.getMessage() echoes the
+    // caller-supplied credential_configuration_id(s) verbatim; @Size/@Pattern on the DTO
+    // now bounds them, but the client-facing detail must not depend on that staying true.
     @ExceptionHandler(UnknownCredentialConfigurationException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public Mono<GlobalErrorMessage> handleUnknownCredentialConfiguration(
             UnknownCredentialConfigurationException ex,
             ServerHttpRequest request
     ) {
-        return errors.handleWith(
+        return errors.handleSafe(
                 ex, request,
                 GlobalErrorTypes.UNKNOWN_CREDENTIAL_CONFIGURATION.getCode(),
                 "Unknown credential configuration",
@@ -751,13 +754,16 @@ public class SharedExceptionHandler {
     // PATCH /admin/v1/credential-catalog (EUD-169, AD-13): the declared credential_configuration_id
     // exists globally but is not enabled for this tenant -- a state conflict, not a malformed
     // request, hence 409 rather than 400 (same divide AD-7 already drew for the schema ceiling).
+    // Security review (F5): handleSafe, not handleWith -- ex.getMessage() embeds the
+    // caller-supplied credential_configuration_id verbatim; §9.1 forbids passing exception
+    // messages to the client regardless of today's actual risk (F4 already bounds the id).
     @ExceptionHandler(CredentialConfigurationNotEnabledException.class)
     @ResponseStatus(HttpStatus.CONFLICT)
     public Mono<GlobalErrorMessage> handleCredentialConfigurationNotEnabledException(
             CredentialConfigurationNotEnabledException ex,
             ServerHttpRequest request
     ) {
-        return errors.handleWith(
+        return errors.handleSafe(
                 ex, request,
                 GlobalErrorTypes.CREDENTIAL_CONFIGURATION_NOT_ENABLED.getCode(),
                 "Credential configuration not enabled",
