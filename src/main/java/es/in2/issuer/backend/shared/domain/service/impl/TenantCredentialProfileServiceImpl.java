@@ -3,6 +3,7 @@ package es.in2.issuer.backend.shared.domain.service.impl;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import es.in2.issuer.backend.shared.domain.exception.CredentialCatalogNotConfiguredException;
+import es.in2.issuer.backend.shared.domain.exception.CredentialConfigurationNotEnabledException;
 import es.in2.issuer.backend.shared.domain.exception.InvalidDeliveryConfigException;
 import es.in2.issuer.backend.shared.domain.exception.UnknownCredentialConfigurationException;
 import es.in2.issuer.backend.shared.domain.model.dto.CredentialCatalogEntryDto;
@@ -139,6 +140,43 @@ public class TenantCredentialProfileServiceImpl implements TenantCredentialProfi
     }
 
     /**
+     * Point adjustment (AC-11): unlike {@link #updateCatalog}, this never enables or
+     * disables a type -- it writes exactly the {@code credential_configuration_id}s
+     * declared, each via {@code UPDATE ... WHERE enabled = true} (AD-14), so the
+     * habilitation check <em>is</em> the write itself (no separate read, no TOCTOU window
+     * against the Caffeine cache). Written in ascending {@code ccid} order (W-7) to avoid
+     * a lock-ordering deadlock against a concurrent {@code PUT}/{@code PATCH} on an
+     * overlapping set. A {@code rowsAffected == 0} for any declared id aborts the whole
+     * transaction (ES-10): nothing is left written, not even for the ids that were
+     * enabled.
+     */
+    @Override
+    public Mono<Void> updateDeliveryModes(Map<String, Set<DeliveryMode>> deliveryModesByConfigurationId) {
+        Mono<Void> validation = Mono.fromRunnable(() -> validateDeliveryModesUpdate(deliveryModesByConfigurationId));
+
+        return validation.then(Mono.deferContextual(ctx -> {
+            String tenant = requireTenant(ctx);
+            Instant now = Instant.now();
+
+            Mono<Void> write = Flux.fromIterable(deliveryModesByConfigurationId.keySet().stream().sorted().toList())
+                    .concatMap(id -> repository.updateDeliveryModesIfEnabled(
+                                    id, DeliveryMode.toCanonicalCsv(deliveryModesByConfigurationId.get(id)), now)
+                            .flatMap(rowsAffected -> rowsAffected == 0
+                                    ? Mono.error(new CredentialConfigurationNotEnabledException(
+                                            "Credential configuration id '" + id + "' is not enabled for this tenant"))
+                                    : Mono.just(rowsAffected)))
+                    .then();
+
+            return transactionalOperator.transactional(write)
+                    .doOnSuccess(v -> {
+                        cache.invalidate(tenant);
+                        log.info("Delivery modes patched for tenant '{}': {} type(s)",
+                                tenant, deliveryModesByConfigurationId.size());
+                    });
+        }));
+    }
+
+    /**
      * Validates, in this strict order, before any transaction opens: (1) every enabled id is
      * known to the registry -- must run before touching {@link SchemaDeliveryCeiling}, which
      * throws an unchecked, unhandled {@link IllegalStateException} (→ generic 500) for an
@@ -146,14 +184,7 @@ public class TenantCredentialProfileServiceImpl implements TenantCredentialProfi
      * each declared set of modes is within that type's schema ceiling (AC-04 → 409).
      */
     private void validateUpdateRequest(Set<String> enabledConfigurationIds, Map<String, Set<DeliveryMode>> deliveryModesByConfigurationId) {
-        Set<String> knownIds = registry.getAllProfiles().keySet();
-        Set<String> unknown = enabledConfigurationIds.stream()
-                .filter(id -> !knownIds.contains(id))
-                .collect(Collectors.toSet());
-        if (!unknown.isEmpty()) {
-            throw new UnknownCredentialConfigurationException(
-                    "Unknown credential configuration id(s): " + unknown);
-        }
+        validateKnownToRegistry(enabledConfigurationIds);
 
         Set<String> notEnabled = deliveryModesByConfigurationId.keySet().stream()
                 .filter(id -> !enabledConfigurationIds.contains(id))
@@ -164,6 +195,29 @@ public class TenantCredentialProfileServiceImpl implements TenantCredentialProfi
         }
 
         deliveryModesByConfigurationId.forEach(schemaDeliveryCeiling::validateWithinCeiling);
+    }
+
+    /**
+     * Same order as {@link #validateUpdateRequest} for the same reason (AD-14): the
+     * declared ids must be known to the registry before {@link SchemaDeliveryCeiling} is
+     * consulted, or an unknown id degrades from 400 to an unhandled 500. There is no
+     * {@code enabledConfigurationIds} to cross-check against here -- whether a known id
+     * is actually enabled for this tenant is verified by the write itself (ES-10).
+     */
+    private void validateDeliveryModesUpdate(Map<String, Set<DeliveryMode>> deliveryModesByConfigurationId) {
+        validateKnownToRegistry(deliveryModesByConfigurationId.keySet());
+        deliveryModesByConfigurationId.forEach(schemaDeliveryCeiling::validateWithinCeiling);
+    }
+
+    private void validateKnownToRegistry(Set<String> credentialConfigurationIds) {
+        Set<String> knownIds = registry.getAllProfiles().keySet();
+        Set<String> unknown = credentialConfigurationIds.stream()
+                .filter(id -> !knownIds.contains(id))
+                .collect(Collectors.toSet());
+        if (!unknown.isEmpty()) {
+            throw new UnknownCredentialConfigurationException(
+                    "Unknown credential configuration id(s): " + unknown);
+        }
     }
 
     private String canonicalModesOrNull(String credentialConfigurationId, Map<String, Set<DeliveryMode>> deliveryModesByConfigurationId) {
