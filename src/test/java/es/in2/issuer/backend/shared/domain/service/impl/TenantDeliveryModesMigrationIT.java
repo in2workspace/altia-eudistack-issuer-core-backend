@@ -53,10 +53,19 @@ class TenantDeliveryModesMigrationIT extends PostgresIntegrationBase {
     @Autowired private TenantCredentialProfileService service;
     @Autowired private CredentialProfileRegistry registry;
 
+    // A second, unbound profile fixture (gx.labelcredential.w3c.2) was added on the test
+    // classpath for ES-04/ES-10 multi-type coverage (TD-2/TD-4, CredentialCatalogTransactionalIT).
+    // This suite's ceiling-intersection assertions (e.g. "direct,email" backfilled but
+    // resolved down to "email") depend on configId() resolving to a *bound* type -- exclude
+    // the unbound one explicitly instead of trusting registry iteration order.
+    private static final String UNBOUND_SECOND_FIXTURE = "gx.labelcredential.w3c.2";
+
     private String configId() {
         List<String> ids = List.copyOf(registry.getAllProfiles().keySet());
         assertThat(ids).as("registry must expose at least one credential profile").isNotEmpty();
-        return ids.getFirst();
+        return ids.stream().filter(id -> !id.equals(UNBOUND_SECOND_FIXTURE)).findFirst()
+                .orElseThrow(() -> new IllegalStateException(
+                        "registry must expose a bound credential profile distinct from " + UNBOUND_SECOND_FIXTURE));
     }
 
     /**

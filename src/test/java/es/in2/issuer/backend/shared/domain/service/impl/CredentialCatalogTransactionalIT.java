@@ -51,6 +51,12 @@ class CredentialCatalogTransactionalIT extends PostgresIntegrationBase {
     private static final String TENANT_A = "e2e-tenant-a";
     private static final String TENANT_B = "e2e-tenant-b";
 
+    // Second real profile fixture (TD-2/TD-4): a distinct, unbound credential type so
+    // ES-04/ES-10 can exercise a genuinely mixed multi-type payload against a real
+    // Postgres instead of only against the one bound fixture that used to be alone on
+    // this classpath (src/test/resources/credentials/profiles).
+    private static final String SECOND_CONFIG_ID = "gx.labelcredential.w3c.2";
+
     @Autowired private TenantCredentialProfileService service;
     @Autowired private TenantCredentialProfileRepository repository;
     @Autowired private TransactionalOperator transactionalOperator;
@@ -63,7 +69,15 @@ class CredentialCatalogTransactionalIT extends PostgresIntegrationBase {
     void resetTenants() {
         List<String> ids = List.copyOf(registry.getAllProfiles().keySet());
         assertThat(ids).as("registry must expose at least one credential profile").isNotEmpty();
-        configId = ids.getFirst();
+        assertThat(registry.getByConfigurationId(SECOND_CONFIG_ID))
+                .as("registry must expose the second fixture (%s) used by ES-04/ES-10 multi-type tests", SECOND_CONFIG_ID)
+                .isNotNull();
+        // Exclude SECOND_CONFIG_ID explicitly rather than trusting registry iteration order --
+        // it must never equal configId (Set.of(configId, SECOND_CONFIG_ID) below would throw
+        // IllegalArgumentException: duplicate element if it did).
+        configId = ids.stream().filter(id -> !id.equals(SECOND_CONFIG_ID)).findFirst()
+                .orElseThrow(() -> new IllegalStateException(
+                        "registry must expose a profile distinct from " + SECOND_CONFIG_ID));
         // Clear both tenant schemas (empty set → deleteAll → nothing enabled).
         service.updateCatalog(Set.of()).contextWrite(ctx(TENANT_A)).block();
         service.updateCatalog(Set.of()).contextWrite(ctx(TENANT_B)).block();
@@ -211,21 +225,31 @@ class CredentialCatalogTransactionalIT extends PostgresIntegrationBase {
      * one's delivery-modes value ultimately wins the race.
      */
     @Test
-    void concurrentUpdates_sameTenant_leaveNoDuplicateRows() {
-        service.updateCatalog(Set.of(configId)).contextWrite(ctx(TENANT_A)).block();
+    void concurrentUpdates_sameTenant_leaveNoDuplicateRowsAndPreservesUntouchedType() {
+        // Seed both types enabled; SECOND_CONFIG_ID starts with modes already configured.
+        service.updateCatalog(Set.of(configId, SECOND_CONFIG_ID),
+                        Map.of(SECOND_CONFIG_ID, EnumSet.of(DeliveryMode.UI)))
+                .contextWrite(ctx(TENANT_A)).block();
 
+        // Neither concurrent write below declares modes for SECOND_CONFIG_ID (ES-04: "el
+        // sistema MUST NOT perder los modos de entrega de los tipos que ninguna de las dos
+        // declaró") -- its stored modes must survive both, regardless of interleaving.
         Mono<Void> writeDeclaringModes = service.updateCatalog(
-                        Set.of(configId), Map.of(configId, EnumSet.of(DeliveryMode.EMAIL)))
+                        Set.of(configId, SECOND_CONFIG_ID), Map.of(configId, EnumSet.of(DeliveryMode.EMAIL)))
                 .contextWrite(ctx(TENANT_A));
-        Mono<Void> writePreservingModes = service.updateCatalog(Set.of(configId))
+        Mono<Void> writePreservingModes = service.updateCatalog(Set.of(configId, SECOND_CONFIG_ID))
                 .contextWrite(ctx(TENANT_A));
 
         Flux.merge(writeDeclaringModes, writePreservingModes).blockLast();
 
         List<TenantCredentialProfile> rows =
                 repository.findAllByEnabledTrue().collectList().contextWrite(ctx(TENANT_A)).block();
-        assertThat(rows).hasSize(1);
-        assertThat(rows.getFirst().credentialConfigurationId()).isEqualTo(configId);
+        assertThat(rows).hasSize(2);
+        assertThat(rows).extracting(TenantCredentialProfile::credentialConfigurationId)
+                .containsExactlyInAnyOrder(configId, SECOND_CONFIG_ID);
+        assertThat(rows).filteredOn(r -> r.credentialConfigurationId().equals(SECOND_CONFIG_ID))
+                .extracting(TenantCredentialProfile::deliveryModes)
+                .containsExactly("ui");
     }
 
     /**
@@ -270,15 +294,6 @@ class CredentialCatalogTransactionalIT extends PostgresIntegrationBase {
      * because the write is a plain {@code UPDATE} (AD-14), there is structurally nothing
      * to roll back: the row count stays at zero, the type is not silently enabled as a
      * side effect of the failed PATCH.
-     *
-     * <p>Tests only one credential_configuration_id: the registry backing this
-     * integration test exposes a single real profile fixture (see TD-2, same limitation
-     * already documented for {@link #concurrentUpdates_sameTenant_leaveNoDuplicateRows}),
-     * so a payload mixing an enabled id with a distinct not-enabled one cannot be built
-     * here. The multi-id sequential-abort behavior (some ids enabled, one not, zero
-     * writes for any of them) is covered at the unit level instead
-     * ({@code TenantCredentialProfileServiceImplTest#updateDeliveryModes_oneIdNotEnabled_rejectsAndWritesNothingElse}) --
-     * see tech-debt.md TD-4.
      */
     @Test
     void updateDeliveryModes_ccidNotEnabled_rejectsAndCreatesNoRow() {
@@ -290,6 +305,35 @@ class CredentialCatalogTransactionalIT extends PostgresIntegrationBase {
         List<TenantCredentialProfile> rows =
                 repository.findAllByEnabledTrue().collectList().contextWrite(ctx(TENANT_A)).block();
         assertThat(rows).isEmpty();
+    }
+
+    /**
+     * ES-10 (TD-4, now closed against a real DB): mixing one already-enabled id with a
+     * distinct, known-but-not-enabled one rejects the whole operation atomically --
+     * "el sistema MUST NOT persistir ninguna parte de la petición, tampoco los modos de
+     * los tipos que sí estaban habilitados". {@code configId} is enabled and declares a
+     * change; {@code SECOND_CONFIG_ID} is known to the registry but never enabled for
+     * this tenant. Complements the unit-level, mocked coverage of the same clause
+     * ({@code TenantCredentialProfileServiceImplTest#updateDeliveryModes_oneIdNotEnabled_rejectsAndWritesNothingElse}).
+     */
+    @Test
+    void updateDeliveryModes_mixedEnabledAndNotEnabled_rejectsAtomicallyWritingNothing() {
+        service.updateCatalog(Set.of(configId)).contextWrite(ctx(TENANT_A)).block();
+
+        StepVerifier.create(service.updateDeliveryModes(Map.of(
+                                configId, Set.of(DeliveryMode.EMAIL),
+                                SECOND_CONFIG_ID, Set.of(DeliveryMode.UI)))
+                        .contextWrite(ctx(TENANT_A)))
+                .expectError(CredentialConfigurationNotEnabledException.class)
+                .verify();
+
+        List<TenantCredentialProfile> rows =
+                repository.findAllByEnabledTrue().collectList().contextWrite(ctx(TENANT_A)).block();
+        assertThat(rows).hasSize(1);
+        assertThat(rows.getFirst().credentialConfigurationId()).isEqualTo(configId);
+        assertThat(rows.getFirst().deliveryModes())
+                .as("the enabled type's own declared change must not land either -- the whole operation aborted")
+                .isNull();
     }
 
     /**
