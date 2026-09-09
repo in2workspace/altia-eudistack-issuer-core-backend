@@ -1,6 +1,7 @@
 package es.in2.issuer.backend.shared.domain.service.impl;
 
 import es.in2.issuer.backend.shared.domain.exception.CredentialCatalogNotConfiguredException;
+import es.in2.issuer.backend.shared.domain.exception.CredentialConfigurationNotEnabledException;
 import es.in2.issuer.backend.shared.domain.exception.DeliveryModeNotEligibleException;
 import es.in2.issuer.backend.shared.domain.exception.InvalidDeliveryConfigException;
 import es.in2.issuer.backend.shared.domain.exception.UnknownCredentialConfigurationException;
@@ -508,6 +509,120 @@ class TenantCredentialProfileServiceImplTest {
                 .contextWrite(Context.of(TENANT_DOMAIN_CONTEXT_KEY, TENANT)).block();
 
         verify(repository, times(1)).findAllByEnabledTrue();
+    }
+
+    // ---- updateDeliveryModes (PATCH, AC-11) ------------------------------------
+
+    /**
+     * AC-11: writes exactly the declared credential_configuration_ids, each normalized
+     * to canonical CSV before it reaches the repository.
+     */
+    @Test
+    void updateDeliveryModes_declaredIds_writesEachOne() {
+        when(registry.getAllProfiles()).thenReturn(Map.of("A", profile("A", "A"), "B", profile("B", "B")));
+        when(repository.updateDeliveryModesIfEnabled(eq("A"), eq("email"), any())).thenReturn(Mono.just(1));
+        when(repository.updateDeliveryModesIfEnabled(eq("B"), eq("email,ui"), any())).thenReturn(Mono.just(1));
+
+        StepVerifier.create(service.updateDeliveryModes(
+                        Map.of("A", Set.of(DeliveryMode.EMAIL), "B", Set.of(DeliveryMode.UI, DeliveryMode.EMAIL)))
+                        .contextWrite(Context.of(TENANT_DOMAIN_CONTEXT_KEY, TENANT)))
+                .verifyComplete();
+
+        verify(repository, times(1)).updateDeliveryModesIfEnabled(eq("A"), eq("email"), any());
+        verify(repository, times(1)).updateDeliveryModesIfEnabled(eq("B"), eq("email,ui"), any());
+    }
+
+    /**
+     * EC-10: this operation never inserts or deletes rows -- only the two declared
+     * updates are the repository, no upsert/delete/prune call is ever made.
+     */
+    @Test
+    void updateDeliveryModes_neverCreatesOrDeletesRows() {
+        when(registry.getAllProfiles()).thenReturn(Map.of("A", profile("A", "A")));
+        when(repository.updateDeliveryModesIfEnabled(eq("A"), eq("email"), any())).thenReturn(Mono.just(1));
+
+        StepVerifier.create(service.updateDeliveryModes(Map.of("A", Set.of(DeliveryMode.EMAIL)))
+                        .contextWrite(Context.of(TENANT_DOMAIN_CONTEXT_KEY, TENANT)))
+                .verifyComplete();
+
+        verify(repository, never()).upsert(anyString(), anyBoolean(), any(), any());
+        verify(repository, never()).deleteAllByCredentialConfigurationIdNotIn(any());
+        verify(repository, never()).deleteAll();
+    }
+
+    /**
+     * EC-11: reapplying the same request twice, and again with the modes declared in a
+     * different order with repeats, is idempotent and normalizes identically each time.
+     */
+    @Test
+    void updateDeliveryModes_reappliedWithSameValueInAnyOrder_isIdempotent() {
+        when(registry.getAllProfiles()).thenReturn(Map.of("A", profile("A", "A")));
+        when(repository.updateDeliveryModesIfEnabled(eq("A"), eq("email,ui"), any())).thenReturn(Mono.just(1));
+
+        StepVerifier.create(service.updateDeliveryModes(Map.of("A", Set.of(DeliveryMode.EMAIL, DeliveryMode.UI)))
+                        .contextWrite(Context.of(TENANT_DOMAIN_CONTEXT_KEY, TENANT)))
+                .verifyComplete();
+        StepVerifier.create(service.updateDeliveryModes(Map.of("A", Set.of(DeliveryMode.UI, DeliveryMode.EMAIL)))
+                        .contextWrite(Context.of(TENANT_DOMAIN_CONTEXT_KEY, TENANT)))
+                .verifyComplete();
+
+        verify(repository, times(2)).updateDeliveryModesIfEnabled(eq("A"), eq("email,ui"), any());
+    }
+
+    /**
+     * ES-10: a rowsAffected == 0 for any declared id (not currently enabled) aborts the
+     * whole operation -- not even the ids that were enabled get written, verified here
+     * by asserting the second id's update is never attempted (sequential, alphabetical
+     * order, W-7) once the first one fails.
+     */
+    @Test
+    void updateDeliveryModes_oneIdNotEnabled_rejectsAndWritesNothingElse() {
+        when(registry.getAllProfiles()).thenReturn(Map.of("A", profile("A", "A"), "B", profile("B", "B")));
+        when(repository.updateDeliveryModesIfEnabled(eq("A"), anyString(), any())).thenReturn(Mono.just(0));
+
+        StepVerifier.create(service.updateDeliveryModes(
+                        Map.of("A", Set.of(DeliveryMode.EMAIL), "B", Set.of(DeliveryMode.EMAIL)))
+                        .contextWrite(Context.of(TENANT_DOMAIN_CONTEXT_KEY, TENANT)))
+                .expectError(CredentialConfigurationNotEnabledException.class)
+                .verify();
+
+        verify(repository, never()).updateDeliveryModesIfEnabled(eq("B"), anyString(), any());
+    }
+
+    /**
+     * Order of validation (AD-14): an id unknown to the registry must fail with
+     * UnknownCredentialConfigurationException (→ 400) before SchemaDeliveryCeiling is
+     * ever consulted -- inverting the order would surface as an unhandled 500 instead.
+     */
+    @Test
+    void updateDeliveryModes_unknownId_failsFastBeforeCeilingCheck() {
+        when(registry.getAllProfiles()).thenReturn(Map.of("A", profile("A", "A")));
+
+        StepVerifier.create(service.updateDeliveryModes(Map.of("UNKNOWN", Set.of(DeliveryMode.EMAIL)))
+                        .contextWrite(Context.of(TENANT_DOMAIN_CONTEXT_KEY, TENANT)))
+                .expectError(UnknownCredentialConfigurationException.class)
+                .verify();
+
+        verify(schemaDeliveryCeiling, never()).validateWithinCeiling(anyString(), any());
+        verify(repository, never()).updateDeliveryModesIfEnabled(anyString(), anyString(), any());
+    }
+
+    /**
+     * AC-04, via the point-adjustment path: a mode outside the schema ceiling is rejected
+     * before any write, exactly as the PUT rejects it.
+     */
+    @Test
+    void updateDeliveryModes_directOnBoundType_rejectsWithoutWriting() {
+        when(registry.getAllProfiles()).thenReturn(Map.of("A", profile("A", "A")));
+        doThrow(new DeliveryModeNotEligibleException("direct not eligible for A"))
+                .when(schemaDeliveryCeiling).validateWithinCeiling(eq("A"), any());
+
+        StepVerifier.create(service.updateDeliveryModes(Map.of("A", Set.of(DeliveryMode.DIRECT)))
+                        .contextWrite(Context.of(TENANT_DOMAIN_CONTEXT_KEY, TENANT)))
+                .expectError(DeliveryModeNotEligibleException.class)
+                .verify();
+
+        verify(repository, never()).updateDeliveryModesIfEnabled(anyString(), anyString(), any());
     }
 
     // ---- helpers --------------------------------------------------------------
