@@ -181,7 +181,14 @@ public class TenantCredentialProfileServiceImpl implements TenantCredentialProfi
      * known to the registry -- must run before touching {@link SchemaDeliveryCeiling}, which
      * throws an unchecked, unhandled {@link IllegalStateException} (→ generic 500) for an
      * unknown id; (2) every id declaring delivery modes is among the enabled ids (ES-03); (3)
-     * each declared set of modes is within that type's schema ceiling (AC-04 → 409).
+     * each declared set of modes is within that type's schema ceiling (AC-04 → 409, via
+     * {@link #validateWithinCeiling}).
+     *
+     * <p>{@code validateKnownToRegistry} then {@code validateWithinCeiling} is the same
+     * registry-before-ceiling pair {@link #validateDeliveryModesUpdate} composes (code review
+     * W2): the two named steps, not an inlined check, are what keeps them in lockstep -- a
+     * third shared validation step is added to both by calling it from here, in between if
+     * order-sensitive like ES-03, without re-deriving the registry/ceiling pairing twice.
      */
     private void validateUpdateRequest(Set<String> enabledConfigurationIds, Map<String, Set<DeliveryMode>> deliveryModesByConfigurationId) {
         validateKnownToRegistry(enabledConfigurationIds);
@@ -194,19 +201,20 @@ public class TenantCredentialProfileServiceImpl implements TenantCredentialProfi
                     "Delivery modes declared for credential configuration id(s) not enabled in this request: " + notEnabled);
         }
 
-        deliveryModesByConfigurationId.forEach(schemaDeliveryCeiling::validateWithinCeiling);
+        validateWithinCeiling(deliveryModesByConfigurationId);
     }
 
     /**
-     * Same order as {@link #validateUpdateRequest} for the same reason (AD-14): the
+     * Same registry-before-ceiling pair as {@link #validateUpdateRequest} (AD-14): the
      * declared ids must be known to the registry before {@link SchemaDeliveryCeiling} is
      * consulted, or an unknown id degrades from 400 to an unhandled 500. There is no
      * {@code enabledConfigurationIds} to cross-check against here -- whether a known id
-     * is actually enabled for this tenant is verified by the write itself (ES-10).
+     * is actually enabled for this tenant is verified by the write itself (ES-10) -- so
+     * nothing needs to run between the two steps.
      */
     private void validateDeliveryModesUpdate(Map<String, Set<DeliveryMode>> deliveryModesByConfigurationId) {
         validateKnownToRegistry(deliveryModesByConfigurationId.keySet());
-        deliveryModesByConfigurationId.forEach(schemaDeliveryCeiling::validateWithinCeiling);
+        validateWithinCeiling(deliveryModesByConfigurationId);
     }
 
     private void validateKnownToRegistry(Set<String> credentialConfigurationIds) {
@@ -218,6 +226,10 @@ public class TenantCredentialProfileServiceImpl implements TenantCredentialProfi
             throw new UnknownCredentialConfigurationException(
                     "Unknown credential configuration id(s): " + unknown);
         }
+    }
+
+    private void validateWithinCeiling(Map<String, Set<DeliveryMode>> deliveryModesByConfigurationId) {
+        deliveryModesByConfigurationId.forEach(schemaDeliveryCeiling::validateWithinCeiling);
     }
 
     private String canonicalModesOrNull(String credentialConfigurationId, Map<String, Set<DeliveryMode>> deliveryModesByConfigurationId) {
