@@ -30,6 +30,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `chk_tcp_delivery_modes` (`V13`) now only accepts the 7 canonical, deduplicated, alphabetically-sorted CSV forms of `direct`/`email`/`ui` — previously a syntactically valid but non-canonical value (a duplicate, or out of order) also passed (TD-6).
 - `TenantCredentialProfileRepository.deleteAllByCredentialConfigurationIdNotIn` now no-ops on an empty id set instead of reaching an engine-level `NOT IN ()` (TD-8) — unreachable via today's only caller, guarded for any future one.
 
+### Tests (EUD-169 — close remaining ES-04/ES-10 multi-type coverage gaps, TD-2/TD-4)
+
+- Added a second credential profile fixture (`gx.labelcredential.w3c.2`, unbound) to the test classpath so `CredentialCatalogTransactionalIT` can build a genuinely mixed multi-type payload against a real Postgres: concurrent writes now prove the type neither one declared survives untouched (ES-04), and a `PATCH` mixing an enabled type with a known-but-not-enabled one now proves the whole operation aborts, including for the type that was already enabled (ES-10). Both were previously evidenced only indirectly (partial single-type real-DB tests + mocked multi-id unit tests). No production behavior change.
+
 ## [3.8.0] - 2026-09-07
 
 ### Fixed
