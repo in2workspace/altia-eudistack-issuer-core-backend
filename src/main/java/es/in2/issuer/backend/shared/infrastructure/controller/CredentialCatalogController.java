@@ -34,18 +34,20 @@ import static es.in2.issuer.backend.shared.domain.util.Constants.TENANT_DOMAIN_C
 import static es.in2.issuer.backend.shared.domain.util.EndpointsConstants.CREDENTIAL_CATALOG_PATH;
 
 /**
- * Admin API for the per-tenant credential catalog (EUD-72, US-02). Only a tenant
- * administrator (or SysAdmin) may use it. The tenant is always resolved from the
- * reactive context (subdomain / X-Tenant), never from the request body — see
- * {@code TenantDomainWebFilter}.
+ * Admin API for the per-tenant credential catalog (EUD-72, US-02, EUD-169). The tenant is
+ * always resolved from the reactive context (subdomain / X-Tenant), never from the request
+ * body — see {@code TenantDomainWebFilter}.
  *
- * <p>Reads and writes are authorized separately, matching {@code IssuanceController}:
+ * <p>Reads and writes are authorized separately, and since the operator-read delta (AD-16)
+ * they no longer share a gate:
  * <ul>
- *     <li><b>GET</b> requires {@code isTenantAdmin()} only. A SysAdmin operating from the
- *         platform tenant holds a cross-tenant read-only view, so denying reads would
- *         contradict both AC-03 and the meaning of {@code AuthorizationContext#readOnly}.</li>
- *     <li><b>PUT</b> additionally requires {@code canWrite()}, which rejects that same
- *         read-only SysAdmin.</li>
+ *     <li><b>GET</b> requires {@code canReadCredentialCatalog()} — a tenant administrator,
+ *         SysAdmin (including the cross-tenant read-only view from {@code platform}), or
+ *         the tenant's operator ({@code LEAR}), who needs to discover a type's eligible
+ *         delivery modes and schema ceiling before attempting to issue it.</li>
+ *     <li><b>PUT</b>/<b>PATCH</b> independently require {@code isTenantAdmin()} <b>and</b>
+ *         {@code canWrite()} — checked without delegating to the read gate, so relaxing the
+ *         read side can never relax the write side as a side effect.</li>
  * </ul>
  *
  * <p>An empty catalog is not a valid state: <b>PUT</b> with an empty
@@ -70,7 +72,7 @@ public class CredentialCatalogController {
     @ResponseStatus(HttpStatus.OK)
     public Mono<List<CredentialCatalogEntryDto>> getCatalog(
             @RequestHeader(HttpHeaders.AUTHORIZATION) String authorizationHeader) {
-        return authorizeTenantAdminRead(authorizationHeader)
+        return authorizeCatalogRead(authorizationHeader)
                 .then(Mono.defer(tenantCredentialProfileService::getCatalog));
     }
 
@@ -160,23 +162,30 @@ public class CredentialCatalogController {
         }
     }
 
-    private Mono<AuthorizationContext> authorizeTenantAdminRead(String authorizationHeader) {
+    private Mono<AuthorizationContext> authorizeCatalogRead(String authorizationHeader) {
         return accessTokenService.getAuthorizationContext(authorizationHeader)
                 .flatMap(ctx -> {
-                    if (!ctx.isTenantAdmin()) {
+                    if (!ctx.canReadCredentialCatalog()) {
                         return Mono.error(new ResponseStatusException(
-                                HttpStatus.FORBIDDEN, "Tenant administrator role required"));
+                                HttpStatus.FORBIDDEN, "Tenant administrator, SysAdmin or operator role required"));
                     }
                     return Mono.just(ctx);
                 });
     }
 
+    /**
+     * Deliberately does not delegate to {@link #authorizeCatalogRead}: since AD-16 opened
+     * the read gate to the operator ({@code LEAR}), and a {@code LEAR} has
+     * {@code readOnly == false}, delegating would silently open the write path to the
+     * operator too. Checked independently, in one place, so relaxing the read side can
+     * never relax this one as a side effect.
+     */
     private Mono<AuthorizationContext> authorizeTenantAdminWrite(String authorizationHeader) {
-        return authorizeTenantAdminRead(authorizationHeader)
+        return accessTokenService.getAuthorizationContext(authorizationHeader)
                 .flatMap(ctx -> {
-                    if (!ctx.canWrite()) {
+                    if (!ctx.isTenantAdmin() || !ctx.canWrite()) {
                         return Mono.error(new ResponseStatusException(
-                                HttpStatus.FORBIDDEN, "Read-only access from platform tenant"));
+                                HttpStatus.FORBIDDEN, "Tenant administrator role with write access required"));
                     }
                     return Mono.just(ctx);
                 });
