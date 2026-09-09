@@ -17,6 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **The parallel delivery-config module** (`/api/v1/backoffice/delivery-config/{credentialConfigurationId}`, `TenantDeliveryConfigService(Impl)`, backed by `tenant_config` keys `issuer.delivery.modes.*`) — superseded by the catalog column above (EUD-169, single cutover). The `tenant_config` keys themselves are left in place, inert (no code path reads them anymore) as a rollback safety net; their physical purge is tracked as separate tech debt.
 
+### Security (EUD-169 — cross-tenant catalog disclosure, `/code-review` full-mode security audit, S1/F2/F3)
+
+- **`GET`/`PUT`/`PATCH /admin/v1/credential-catalog` now reject a caller whose access token's `tenant` claim does not match the resolved tenant** (`X-Tenant`/host, `TenantDomainWebFilter`) — `403 tenant_mismatch`. Previously, a caller holding a valid token for their own tenant could read or write **another** tenant's catalog by sending a different `X-Tenant` (S1, CRITICAL: the read side became reachable to any authenticated organization once `GET` opened to the operator role in this same Story, AD-16). SysAdmin is explicitly exempted — it legitimately administers tenants other than its own token's, the same accepted convention used elsewhere (`RequirePowerRule`'s bypass). `AccessTokenService` gains an additive `getTokenTenant(String)` method (`AccessTokenServiceImpl`, `IssuanceController`/`MeController` untouched, scoped fix — the shared root cause is tracked as `TDG-21`).
+- **Denied authorization attempts on the catalog (wrong role, or the new tenant-mismatch check above) are now audited** (`authorization.deny` / `tenant_isolation_breach`, `AuditService.auditFailure`) — previously only a successful write left an audit trail; a rejected attempt to read or change a tenant's delivery-mode policy left no trace at all (F3). The tenant-mismatch case uses the `tenant_isolation_breach` event name so it can drive the cross-tenant-isolation alerting the SAD (§8.6/§8.7, SLO-9) already specifies. The already-existing SysAdmin cross-tenant *write* audit (F2) needed no separate "explicit intent" gate — that permissive behavior is the accepted, pre-existing convention (see `TDG-18`), not a defect; its remaining gap was the same missing audit trail this closes.
+
 ## [3.8.0] - 2026-09-07
 
 ### Fixed
