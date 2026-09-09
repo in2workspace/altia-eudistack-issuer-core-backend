@@ -1,6 +1,7 @@
 package es.in2.issuer.backend.shared.infrastructure.controller;
 
 import es.in2.issuer.backend.shared.domain.exception.CredentialCatalogNotConfiguredException;
+import es.in2.issuer.backend.shared.domain.exception.CredentialConfigurationNotEnabledException;
 import es.in2.issuer.backend.shared.domain.exception.DeliveryModeNotEligibleException;
 import es.in2.issuer.backend.shared.domain.exception.InvalidDeliveryConfigException;
 import es.in2.issuer.backend.shared.domain.exception.UnknownCredentialConfigurationException;
@@ -399,6 +400,146 @@ class CredentialCatalogControllerTest {
                 .expectStatus().isBadRequest();
 
         verify(tenantCredentialProfileService, never()).updateCatalog(any(), any());
+    }
+
+    // ---- PATCH /admin/v1/credential-catalog (AC-11) ----------------------------
+
+    @Test
+    void patchDeliveryModes_asTenantAdmin_returns200() {
+        when(accessTokenService.getAuthorizationContext(anyString()))
+                .thenReturn(Mono.just(admin()));
+        when(tenantCredentialProfileService.updateDeliveryModes(any()))
+                .thenReturn(Mono.empty());
+
+        webTestClient.mutateWith(csrf())
+                .patch()
+                .uri(CREDENTIAL_CATALOG_PATH)
+                .header("Authorization", "Bearer token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"deliveryModesByConfigurationId\":{\"learcredential.employee.w3c.4\":[\"email\"]}}")
+                .exchange()
+                .expectStatus().isOk();
+
+        // AD-15: shares the PUT's audit event, discriminated by "action" in the detail map.
+        verify(auditService).auditSuccess(eq("tenant.credential_catalog.changed"), eq("org-1"), eq("credential-catalog"), anyString(), any());
+    }
+
+    /**
+     * ES-10: a declared credential_configuration_id that is not currently enabled for
+     * the tenant is a 409, not a 400 -- distinct from the schema-ceiling 409 below (AD-13).
+     */
+    @Test
+    void patchDeliveryModes_ccidNotEnabled_returns409() {
+        when(accessTokenService.getAuthorizationContext(anyString()))
+                .thenReturn(Mono.just(admin()));
+        when(tenantCredentialProfileService.updateDeliveryModes(any()))
+                .thenReturn(Mono.error(new CredentialConfigurationNotEnabledException(
+                        "Credential configuration id 'learcredential.employee.w3c.4' is not enabled for this tenant")));
+
+        webTestClient.mutateWith(csrf())
+                .patch()
+                .uri(CREDENTIAL_CATALOG_PATH)
+                .header("Authorization", "Bearer token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"deliveryModesByConfigurationId\":{\"learcredential.employee.w3c.4\":[\"email\"]}}")
+                .exchange()
+                .expectStatus().isEqualTo(409)
+                .expectBody()
+                .jsonPath("$.type").isEqualTo("credential_configuration_not_enabled");
+    }
+
+    /**
+     * AC-04, via the point-adjustment path: a mode outside the schema ceiling is 409
+     * with the same code the PUT uses.
+     */
+    @Test
+    void patchDeliveryModes_directAboveSchemaCeiling_returns409() {
+        when(accessTokenService.getAuthorizationContext(anyString()))
+                .thenReturn(Mono.just(admin()));
+        when(tenantCredentialProfileService.updateDeliveryModes(any()))
+                .thenReturn(Mono.error(new DeliveryModeNotEligibleException(
+                        "Delivery mode 'direct' is not eligible for credential type "
+                                + "'learcredential.employee.w3c.4': its schema requires cryptographic holder binding. "
+                                + "Eligible modes: email,ui")));
+
+        webTestClient.mutateWith(csrf())
+                .patch()
+                .uri(CREDENTIAL_CATALOG_PATH)
+                .header("Authorization", "Bearer token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"deliveryModesByConfigurationId\":{\"learcredential.employee.w3c.4\":[\"direct\"]}}")
+                .exchange()
+                .expectStatus().isEqualTo(409)
+                .expectBody()
+                .jsonPath("$.type").isEqualTo("delivery_mode_not_eligible");
+    }
+
+    @Test
+    void patchDeliveryModes_emptyMap_returns400WithoutCallingService() {
+        when(accessTokenService.getAuthorizationContext(anyString()))
+                .thenReturn(Mono.just(admin()));
+
+        webTestClient.mutateWith(csrf())
+                .patch()
+                .uri(CREDENTIAL_CATALOG_PATH)
+                .header("Authorization", "Bearer token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"deliveryModesByConfigurationId\":{}}")
+                .exchange()
+                .expectStatus().isBadRequest();
+
+        verify(tenantCredentialProfileService, never()).updateDeliveryModes(any());
+    }
+
+    @Test
+    void patchDeliveryModes_unknownDeliveryModeToken_returns400WithoutCallingService() {
+        when(accessTokenService.getAuthorizationContext(anyString()))
+                .thenReturn(Mono.just(admin()));
+
+        webTestClient.mutateWith(csrf())
+                .patch()
+                .uri(CREDENTIAL_CATALOG_PATH)
+                .header("Authorization", "Bearer token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"deliveryModesByConfigurationId\":{\"learcredential.employee.w3c.4\":[\"carrier-pigeon\"]}}")
+                .exchange()
+                .expectStatus().isBadRequest();
+
+        verify(tenantCredentialProfileService, never()).updateDeliveryModes(any());
+    }
+
+    @Test
+    void patchDeliveryModes_asLear_returns403AndDoesNotWrite() {
+        when(accessTokenService.getAuthorizationContext(anyString()))
+                .thenReturn(Mono.just(lear()));
+
+        webTestClient.mutateWith(csrf())
+                .patch()
+                .uri(CREDENTIAL_CATALOG_PATH)
+                .header("Authorization", "Bearer token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"deliveryModesByConfigurationId\":{\"learcredential.employee.w3c.4\":[\"email\"]}}")
+                .exchange()
+                .expectStatus().isForbidden();
+
+        verify(tenantCredentialProfileService, never()).updateDeliveryModes(any());
+    }
+
+    @Test
+    void patchDeliveryModes_asReadOnlyAdmin_returns403() {
+        when(accessTokenService.getAuthorizationContext(anyString()))
+                .thenReturn(Mono.just(readOnlyAdmin()));
+
+        webTestClient.mutateWith(csrf())
+                .patch()
+                .uri(CREDENTIAL_CATALOG_PATH)
+                .header("Authorization", "Bearer token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"deliveryModesByConfigurationId\":{\"learcredential.employee.w3c.4\":[\"email\"]}}")
+                .exchange()
+                .expectStatus().isForbidden();
+
+        verify(tenantCredentialProfileService, never()).updateDeliveryModes(any());
     }
 
     private static AuthorizationContext admin() {
