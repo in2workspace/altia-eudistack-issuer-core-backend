@@ -698,6 +698,83 @@ class CredentialCatalogControllerTest {
         verify(tenantCredentialProfileService, never()).updateDeliveryModes(any());
     }
 
+    // ---- deliveryModesByConfigurationId container-element bounds (TD-7) --------
+    // Regression coverage for the F4 constraints (already correct, previously untested).
+
+    @Test
+    void patchDeliveryModes_invalidConfigurationIdKey_returns400WithoutCallingService() {
+        when(accessTokenService.getAuthorizationContext(anyString()))
+                .thenReturn(Mono.just(admin()));
+
+        webTestClient.mutateWith(csrf())
+                .patch()
+                .uri(CREDENTIAL_CATALOG_PATH)
+                .header("Authorization", "Bearer token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"deliveryModesByConfigurationId\":{\"bad id with spaces\":[\"email\"]}}")
+                .exchange()
+                .expectStatus().isBadRequest();
+
+        verify(tenantCredentialProfileService, never()).updateDeliveryModes(any());
+    }
+
+    @Test
+    void patchDeliveryModes_tooManyDeliveryModeValues_returns400WithoutCallingService() {
+        when(accessTokenService.getAuthorizationContext(anyString()))
+                .thenReturn(Mono.just(admin()));
+
+        webTestClient.mutateWith(csrf())
+                .patch()
+                .uri(CREDENTIAL_CATALOG_PATH)
+                .header("Authorization", "Bearer token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"deliveryModesByConfigurationId\":{\"learcredential.employee.w3c.4\":[\"email\",\"ui\",\"direct\",\"carrier-pigeon\"]}}")
+                .exchange()
+                .expectStatus().isBadRequest();
+
+        verify(tenantCredentialProfileService, never()).updateDeliveryModes(any());
+    }
+
+    @Test
+    void patchDeliveryModes_tooManyDeclaredConfigurationIds_returns400WithoutCallingService() {
+        when(accessTokenService.getAuthorizationContext(anyString()))
+                .thenReturn(Mono.just(admin()));
+
+        String tooMany = java.util.stream.IntStream.rangeClosed(1, 33)
+                .mapToObj(i -> "\"type." + i + "\":[\"email\"]")
+                .collect(java.util.stream.Collectors.joining(",", "{", "}"));
+
+        webTestClient.mutateWith(csrf())
+                .patch()
+                .uri(CREDENTIAL_CATALOG_PATH)
+                .header("Authorization", "Bearer token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"deliveryModesByConfigurationId\":" + tooMany + "}")
+                .exchange()
+                .expectStatus().isBadRequest();
+
+        verify(tenantCredentialProfileService, never()).updateDeliveryModes(any());
+    }
+
+    @Test
+    void patchDeliveryModes_overlongDeliveryModeValue_returns400WithoutCallingService() {
+        when(accessTokenService.getAuthorizationContext(anyString()))
+                .thenReturn(Mono.just(admin()));
+
+        String overlong = "a".repeat(17);
+
+        webTestClient.mutateWith(csrf())
+                .patch()
+                .uri(CREDENTIAL_CATALOG_PATH)
+                .header("Authorization", "Bearer token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"deliveryModesByConfigurationId\":{\"learcredential.employee.w3c.4\":[\"" + overlong + "\"]}}")
+                .exchange()
+                .expectStatus().isBadRequest();
+
+        verify(tenantCredentialProfileService, never()).updateDeliveryModes(any());
+    }
+
     // --- Tenant-match tests (security review, EUD-169, S1) ---
 
     @Test
