@@ -1,6 +1,7 @@
 package es.in2.issuer.backend.issuance.application.workflow.impl;
 
 import es.in2.issuer.backend.issuance.application.workflow.IssuanceWorkflow;
+import es.in2.issuer.backend.oidc4vci.application.workflow.impl.Oid4VciCredentialWorkflowImpl;
 import es.in2.issuer.backend.oidc4vci.domain.service.CredentialOfferService;
 import es.in2.issuer.backend.shared.application.workflow.CredentialSignerWorkflow;
 import es.in2.issuer.backend.shared.domain.exception.CredentialTypeUnsupportedException;
@@ -166,11 +167,11 @@ public class IssuanceWorkflowImpl implements IssuanceWorkflow {
             String publicWalletBaseUrl) {
 
         String delivery = request.delivery() != null ? request.delivery() : DEFAULT_DELIVERY;
-        String safeDelivery = keepOnlyOid4vciDeliveryModes(delivery);
 
-        return validateRequest(request, null)
-                .then(Mono.defer(() -> payloadSchemaValidator.validate(request.credentialConfigurationId(), request.payload())))
-                .then(Mono.defer(() -> performIssuanceFlow(processId, request, token, publicIssuerBaseUrl, publicWalletBaseUrl, safeDelivery)));
+        return Mono.fromCallable(() -> keepOnlyOid4vciDeliveryModes(delivery))
+                .flatMap(safeDelivery -> validateRequest(request, null)
+                        .then(Mono.defer(() -> payloadSchemaValidator.validate(request.credentialConfigurationId(), request.payload())))
+                        .then(Mono.defer(() -> performIssuanceFlow(processId, request, token, publicIssuerBaseUrl, publicWalletBaseUrl, safeDelivery))));
     }
 
     private Mono<Void> validateRequest(IssuanceRequest request, String idToken) {
@@ -498,33 +499,38 @@ public class IssuanceWorkflowImpl implements IssuanceWorkflow {
                                 .flatMap(enrichedDataSet ->
                                         statusListWorkflow.allocateEntry(StatusPurpose.REVOCATION, statusFormat,
                                                         issuanceId.toString(), token, publicIssuerBaseUrl)
-                                                .map(entry -> {
-                                                    CredentialStatus credStatus = CredentialStatus.fromStatusListEntry(entry);
-                                                    return genericCredentialBuilder.injectCredentialStatus(
-                                                            enrichedDataSet, credStatus, credentialFormat);
-                                                })
                                                 .onErrorMap(DeliveryStageFailure.wrapUnlessAlready(DeliveryErrorCode.STATUS_LIST_UNAVAILABLE))
-                                )
-                                .flatMap(enrichedWithStatus ->
-                                        credentialSignerWorkflow.signCredential(
-                                                        token, enrichedWithStatus, configId, credentialFormat,
-                                                        cnf, issuanceId.toString(), request.email())
-                                                .onErrorMap(DeliveryStageFailure.wrapUnlessAlready(DeliveryErrorCode.SIGNING_FAILED))
-                                                .flatMap(signedCredential -> {
-                                                    CredentialStatusEnum finalStatus = determineFinalStatus(buildResult);
-                                                    Issuance issuance = buildDirectIssuanceEntity(
-                                                            issuanceId, configId, credentialFormat,
-                                                            buildResult, enrichedWithStatus,
-                                                            request.email(), originalDelivery, finalStatus, cnf);
-                                                    return issuanceService.saveIssuance(issuance)
-                                                            .doOnSuccess(saved -> log.debug(
-                                                                    "ProcessId: {} - Direct issuance saved: {} status={}",
-                                                                    processId, saved.getIssuanceId(), finalStatus))
-                                                            .onErrorMap(DeliveryStageFailure.wrapUnlessAlready(DeliveryErrorCode.PERSISTENCE_FAILED))
-                                                            .thenReturn(IssuanceResponse.builder()
-                                                                    .signedCredential(signedCredential)
-                                                                    .build());
+                                                .flatMap(entry -> {
+                                                    CredentialStatus credStatus = CredentialStatus.fromStatusListEntry(entry);
+                                                    String enrichedWithStatus = genericCredentialBuilder.injectCredentialStatus(
+                                                            enrichedDataSet, credStatus, credentialFormat);
+                                                    return credentialSignerWorkflow.signCredential(
+                                                                    token, enrichedWithStatus, configId, credentialFormat,
+                                                                    cnf, issuanceId.toString(), request.email())
+                                                            .onErrorMap(DeliveryStageFailure.wrapUnlessAlready(DeliveryErrorCode.SIGNING_FAILED))
+                                                            .flatMap(signedCredential -> {
+                                                                CredentialStatusEnum finalStatus = determineFinalStatus(buildResult);
+                                                                Issuance issuance = buildDirectIssuanceEntity(
+                                                                        issuanceId, configId, credentialFormat,
+                                                                        buildResult, enrichedWithStatus,
+                                                                        request.email(), originalDelivery, finalStatus, cnf);
+                                                                return issuanceService.saveIssuance(issuance)
+                                                                        .doOnSuccess(saved -> log.debug(
+                                                                                "ProcessId: {} - Direct issuance saved: {} status={}",
+                                                                                processId, saved.getIssuanceId(), finalStatus))
+                                                                        .onErrorMap(DeliveryStageFailure.wrapUnlessAlready(DeliveryErrorCode.PERSISTENCE_FAILED))
+                                                                        .thenReturn(IssuanceResponse.builder()
+                                                                                .signedCredential(signedCredential)
+                                                                                .build());
+                                                            });
                                                 })
+                                                // W1 (code-review): covers allocate + inject + sign + save under one
+                                                // release. injectCredentialStatus used to run in a separate .map()
+                                                // stage outside this resume's scope, so a malformed enrichedDataSet
+                                                // threw past it and leaked the entry allocateEntry had just reserved.
+                                                // releaseStatusListEntryBestEffort's delete is a no-op when nothing
+                                                // was ever allocated, so covering the allocate failure too is harmless.
+                                                .onErrorResume(error -> releaseStatusListEntryBestEffort(processId, issuanceId, error))
                                 )
                 );
     }
@@ -597,6 +603,19 @@ public class IssuanceWorkflowImpl implements IssuanceWorkflow {
                 .build();
     }
 
+    private <T> Mono<T> releaseStatusListEntryBestEffort(String processId, UUID issuanceId, Throwable original) {
+        return statusListWorkflow.releaseEntry(issuanceId.toString())
+                .doOnSuccess(v -> log.debug(
+                        "ProcessId: {} - Released orphaned status list entry for issuanceId={} after {}",
+                        processId, issuanceId, original.getClass().getSimpleName()))
+                .onErrorResume(releaseError -> {
+                    log.warn("ProcessId: {} - Failed to release status list entry for issuanceId={} (leaked): {}",
+                            processId, issuanceId, releaseError.toString());
+                    return Mono.empty();
+                })
+                .then(Mono.<T>error(original));
+    }
+
     private Issuance buildDirectIssuanceEntity(UUID issuanceId, String credentialType, String credentialFormat,
                                                 CredentialBuildResult buildResult, String enrichedDataSet,
                                                 String email, String delivery, CredentialStatusEnum status,
@@ -634,13 +653,20 @@ public class IssuanceWorkflowImpl implements IssuanceWorkflow {
     }
 
     private String keepOnlyOid4vciDeliveryModes(String delivery) {
-        String oid4vciDelivery = DeliveryMode.parse(delivery).stream()
+        final Set<DeliveryMode> modes;
+        try {
+            modes = DeliveryMode.parse(delivery);
+        } catch (IllegalArgumentException ex) {
+            throw new InvalidDeliveryModeException(ex.getMessage());
+        }
+
+        String oid4vciDelivery = modes.stream()
                 .filter(m -> m.isOid4vci)
                 .map(m -> m.value)
                 .collect(Collectors.joining(","));
 
         if (oid4vciDelivery.isBlank()) {
-            throw new IllegalArgumentException(
+            throw new InvalidDeliveryModeException(
                     "Bootstrap issuance requires at least one OID4VCI delivery mode."
             );
         }

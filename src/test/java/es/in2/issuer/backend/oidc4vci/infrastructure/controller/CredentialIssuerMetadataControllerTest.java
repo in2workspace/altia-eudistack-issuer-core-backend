@@ -4,18 +4,19 @@ import es.in2.issuer.backend.oidc4vci.application.workflow.GetCredentialIssuerMe
 import es.in2.issuer.backend.oidc4vci.domain.model.CredentialIssuerMetadata;
 import es.in2.issuer.backend.shared.domain.model.dto.credential.profile.CredentialProfile;
 import es.in2.issuer.backend.oidc4vci.domain.service.NonceService;
+import es.in2.issuer.backend.shared.domain.service.AccessTokenService;
 import es.in2.issuer.backend.shared.domain.service.TenantRegistryService;
 import es.in2.issuer.backend.shared.infrastructure.config.IssuanceMetrics;
 import es.in2.issuer.backend.shared.infrastructure.controller.error.ErrorResponseFactory;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.reactive.WebFluxTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.security.authentication.ReactiveAuthenticationManager;
 import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
@@ -26,30 +27,33 @@ import java.util.Set;
 import static org.mockito.Mockito.*;
 
 @WithMockUser
-@MockBean(ReactiveAuthenticationManager.class)
+@MockitoBean(types = ReactiveAuthenticationManager.class)
 @WebFluxTest(CredentialIssuerMetadataController.class)
 class CredentialIssuerMetadataControllerTest {
 
     @Autowired
     private WebTestClient webTestClient;
 
-    @MockBean
+    @MockitoBean
     ErrorResponseFactory errorResponseFactory;
 
-    @MockBean
+    @MockitoBean
     private NonceService nonceService;
 
-    @MockBean
+    @MockitoBean
     private GetCredentialIssuerMetadataWorkflow getCredentialIssuerMetadataWorkflow;
 
-    @MockBean
+    @MockitoBean
     private IssuanceMetrics issuanceMetrics;
 
-    @MockBean
+    @MockitoBean
     private TenantRegistryService tenantRegistryService;
 
-    @MockBean
+    @MockitoBean
     private es.in2.issuer.backend.shared.domain.spi.UrlResolver urlResolver;
+
+    @MockitoBean
+    private AccessTokenService accessTokenService;
 
     @Test
     void testGetCredentialIssuer_Metadata_Success() {

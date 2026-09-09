@@ -112,6 +112,9 @@ dependencies {
     testImplementation 'org.springframework.security:spring-security-test'
     testImplementation 'io.projectreactor:reactor-test'
     testImplementation 'com.tngtech.archunit:archunit-junit5:1.4.1'
+    // Self-signed test certificates for SignDocServiceImplTest (H1: real signature verification
+    // needs a real, parseable X.509 certificate — bcprov alone has no certificate builder).
+    testImplementation 'org.bouncycastle:bcpkix-jdk18on:1.84'
 
     // --- Integration Testing ---
     testImplementation 'org.springframework.boot:spring-boot-testcontainers'

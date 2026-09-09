@@ -50,19 +50,6 @@ public class IssuanceHttpEnvelopeMapper {
     }
 
     private ChannelBody buildChannelBody(DeliveryResult result, IssuanceResponse response) {
-        // direct signs synchronously in this same request and returns the credential itself; a mode
-        // that returnsUri (only ui today) points at the dispatched OID4VCI offer when there is one to
-        // point at (there isn't always -- CredentialOfferServiceImpl only builds a URI when the
-        // requested modes include one that returnsUri -- an email-only dispatch has nothing to report
-        // here, so body stays null rather than an uninformative empty object, B1 code-review). Any
-        // other mode (email today) never carries the URI in its own item, even alongside ui: the URI
-        // was already delivered inside the email body, not returned to the API caller through this
-        // channel of the response.
-        //
-        // Resolved via DeliveryMode.fromValue + isDirect()/returnsUri (TD-16) rather than comparing
-        // result.mode() against string literals: a literal check silently treats any future
-        // DeliveryMode as "no URI" even if its returnsUri says otherwise -- the same class of bug B1
-        // already was once.
         DeliveryMode mode = DeliveryMode.fromValue(result.mode()).orElse(null);
         if (mode != null && mode.isDirect()) {
             return ChannelBody.builder()
