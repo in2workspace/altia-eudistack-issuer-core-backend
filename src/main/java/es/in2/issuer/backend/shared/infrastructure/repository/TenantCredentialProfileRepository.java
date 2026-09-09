@@ -38,13 +38,24 @@ public interface TenantCredentialProfileRepository extends ReactiveCrudRepositor
      * Prunes every row whose {@code credential_configuration_id} is not in {@code ids} --
      * a type no longer enabled loses both its enablement and its stored delivery modes
      * (EC-02).
+     *
+     * <p>Guards {@code ids.isEmpty()} explicitly (code review, TD-8): today's only caller
+     * ({@code TenantCredentialProfileServiceImpl#updateCatalog}) already routes an empty
+     * set to {@code deleteAll()} instead, so this is unreachable in production -- but a
+     * future direct caller passing an empty set would otherwise hit an engine-level
+     * {@code NOT IN ()}, whose behavior differs by driver/engine. No-op (0 rows) is the
+     * correct, unambiguous result for "nothing to keep, nothing declared to prune against".
      */
+    default Mono<Integer> deleteAllByCredentialConfigurationIdNotIn(Set<String> ids) {
+        return ids.isEmpty() ? Mono.just(0) : deleteAllNotIn(ids);
+    }
+
     @Modifying
     @Query("""
            DELETE FROM tenant_credential_profile
            WHERE credential_configuration_id NOT IN (:ids)
            """)
-    Mono<Integer> deleteAllByCredentialConfigurationIdNotIn(Set<String> ids);
+    Mono<Integer> deleteAllNotIn(Set<String> ids);
 
     /**
      * Updates only the {@code delivery_modes} column of a single, already-enabled row --
