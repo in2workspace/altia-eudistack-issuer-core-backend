@@ -7,6 +7,8 @@ import es.in2.issuer.backend.shared.domain.model.enums.CredentialStatusEnum;
 import es.in2.issuer.backend.shared.domain.model.enums.DeliveryMode;
 import es.in2.issuer.backend.shared.domain.service.IssuanceService;
 import io.micrometer.observation.annotation.Observed;
+
+import static es.in2.issuer.backend.shared.domain.util.Constants.AUTHORIZATION_CODE;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -18,8 +20,6 @@ import reactor.core.publisher.Mono;
 @Service
 @RequiredArgsConstructor
 public class CredentialOfferRefreshWorkflowImpl implements CredentialOfferRefreshWorkflow {
-
-    private static final String DEFAULT_GRANT_TYPE = "authorization_code";
 
     private final IssuanceService issuanceService;
     private final CredentialOfferService credentialOfferService;
@@ -33,15 +33,20 @@ public class CredentialOfferRefreshWorkflowImpl implements CredentialOfferRefres
                 .switchIfEmpty(Mono.error(new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "Invalid or unknown credential offer refresh token")))
                 .flatMap(this::validateDraftStatus)
-                .flatMap(issuance -> credentialOfferService.createAndDeliverCredentialOffer(
-                        issuance.getIssuanceId().toString(),
-                        issuance.getCredentialType(),
-                        DEFAULT_GRANT_TYPE,
-                        issuance.getEmail(),
-                        DeliveryMode.EMAIL.value,
-                        credentialOfferRefreshToken,
-                        publicIssuerBaseUrl,
-                        publicWalletBaseUrl))
+                .flatMap(issuance -> {
+                    String grantType = issuance.getGrantType() != null
+                            ? issuance.getGrantType()
+                            : AUTHORIZATION_CODE;
+                    return credentialOfferService.createAndDeliverCredentialOffer(
+                            issuance.getIssuanceId().toString(),
+                            issuance.getCredentialType(),
+                            grantType,
+                            issuance.getEmail(),
+                            DeliveryMode.EMAIL.value,
+                            credentialOfferRefreshToken,
+                            publicIssuerBaseUrl,
+                            publicWalletBaseUrl);
+                })
                 .doOnSuccess(v -> log.info("Credential offer refreshed successfully"))
                 .then();
     }

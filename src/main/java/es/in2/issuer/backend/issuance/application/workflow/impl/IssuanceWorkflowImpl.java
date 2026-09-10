@@ -53,7 +53,6 @@ import static es.in2.issuer.backend.shared.domain.util.Constants.*;
 @RequiredArgsConstructor
 public class IssuanceWorkflowImpl implements IssuanceWorkflow {
 
-    private static final String DEFAULT_GRANT_TYPE = "authorization_code";
     private static final String DEFAULT_DELIVERY = "email";
     private static final String DELIVERY_MODES_CONFIG_PREFIX = "issuer.delivery.modes.";
 
@@ -393,13 +392,13 @@ public class IssuanceWorkflowImpl implements IssuanceWorkflow {
                                                            String oid4vciDelivery) {
         String configId = request.credentialConfigurationId();
         CredentialProfile profile = credentialProfileRegistry.getByConfigurationId(configId);
-        String grantType = request.grantType() != null ? request.grantType() : DEFAULT_GRANT_TYPE;
+        String grantType = request.grantType() != null ? request.grantType() : AUTHORIZATION_CODE;
 
         return genericCredentialBuilder.buildCredential(profile, request.payload())
                 .flatMap(buildResult -> {
                     UUID issuanceId = UUID.randomUUID();
                     Issuance issuance = buildIssuanceEntity(issuanceId, configId, profile.format(),
-                            buildResult, request.email(), oid4vciDelivery);
+                            buildResult, request.email(), oid4vciDelivery, grantType);
 
                     return issuanceService.saveIssuance(issuance)
                             .doOnSuccess(saved -> log.debug("ProcessId: {} - Created OID4VCI issuance: {}", processId, saved.getIssuanceId()))
@@ -415,7 +414,8 @@ public class IssuanceWorkflowImpl implements IssuanceWorkflow {
     }
 
     private Issuance buildIssuanceEntity(UUID issuanceId, String credentialType, String credentialFormat,
-                                          CredentialBuildResult buildResult, String email, String delivery) {
+                                          CredentialBuildResult buildResult, String email, String delivery,
+                                          String grantType) {
         return Issuance.builder()
                 .issuanceId(issuanceId)
                 .credentialStatus(CredentialStatusEnum.DRAFT)
@@ -428,6 +428,7 @@ public class IssuanceWorkflowImpl implements IssuanceWorkflow {
                 .validUntil(buildResult.validUntil())
                 .email(email)
                 .delivery(delivery)
+                .grantType(grantType)
                 .credentialOfferRefreshToken(UUID.randomUUID().toString())
                 .build();
     }
@@ -447,6 +448,7 @@ public class IssuanceWorkflowImpl implements IssuanceWorkflow {
                 .validUntil(buildResult.validUntil())
                 .email(email)
                 .delivery(delivery)
+                .grantType(AUTHORIZATION_CODE)
                 .credentialOfferRefreshToken(UUID.randomUUID().toString())
                 .build();
     }

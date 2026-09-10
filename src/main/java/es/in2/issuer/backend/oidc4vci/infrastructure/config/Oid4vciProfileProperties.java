@@ -1,6 +1,7 @@
 package es.in2.issuer.backend.oidc4vci.infrastructure.config;
 
 import es.in2.issuer.backend.oidc4vci.domain.model.port.Oid4vciProfilePort;
+import es.in2.issuer.backend.shared.domain.util.Constants;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.util.List;
@@ -28,19 +29,19 @@ public record Oid4vciProfileProperties(
     }
 
     public Oid4vciProfileProperties {
-        if (grantsSupported == null) grantsSupported = List.of("urn:ietf:params:oauth:grant-type:pre-authorized_code");
+        if (grantsSupported == null) grantsSupported = List.of(Constants.GRANT_TYPE);
         if (authorizationCode == null) authorizationCode = new AuthorizationCodeProperties(
                 false, false, List.of("S256"), false, List.of("ES256"), "none", false
         );
     }
 
     public boolean isAuthorizationCodeEnabled() {
-        return grantsSupported != null && grantsSupported.contains("authorization_code");
+        return grantsSupported != null && grantsSupported.contains(Constants.AUTHORIZATION_CODE);
     }
 
     public boolean isPreAuthorizedCodeEnabled() {
         return grantsSupported != null &&
-                grantsSupported.contains("urn:ietf:params:oauth:grant-type:pre-authorized_code");
+                grantsSupported.contains(Constants.GRANT_TYPE);
     }
 
     public boolean isHaipProfile() {
