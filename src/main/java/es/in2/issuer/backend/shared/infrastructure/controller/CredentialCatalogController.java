@@ -54,8 +54,12 @@ import static es.in2.issuer.backend.shared.domain.util.EndpointsConstants.CREDEN
  * </ul>
  *
  * <p>Both gates additionally require the access token's own {@code tenant} claim to match
- * the resolved tenant ({@link #requireTenantMatch}), except for SysAdmin, which is expected
- * to act across tenants (security review, EUD-169, S1).
+ * the resolved tenant ({@link #requireTenantMatch}) — SysAdmin included, no exemption
+ * (security review, EUD-169, S1 / M2 follow-up): every other tenant-match check in the
+ * codebase (issuance, revocation, {@code RequireTenantMatchRule}) already holds SysAdmin to
+ * the same rule, and only bypasses a later, narrower power/organization check once a genuine
+ * match already passed — this controller's own earlier exemption was the sole outlier, not a
+ * shared convention.
  *
  * <p>An empty catalog is not a valid state: <b>PUT</b> with an empty
  * {@code enabledConfigurationIds} is rejected (400, bean validation) and <b>GET</b> answers
@@ -87,10 +91,9 @@ public class CredentialCatalogController {
 
     /**
      * A tenant's delivery-mode policy governs whether a credential can be delivered without
-     * holder binding, and a SysAdmin can write it for any tenant, not just their own -- both
-     * of which make an audit trail non-optional here (security review, EUD-169; conv-quality-
-     * security-gates.md §3.3/§3.4/§10.1). {@code doOnSuccess}/{@code doOnError} rather than a
-     * `try`/`catch`: the write itself must not fail because the audit sink does.
+     * holder binding, which makes an audit trail non-optional here (security review, EUD-169;
+     * conv-quality-security-gates.md §3.3/§3.4/§10.1). {@code doOnSuccess}/{@code doOnError}
+     * rather than a `try`/`catch`: the write itself must not fail because the audit sink does.
      */
     @PutMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
     @ResponseStatus(HttpStatus.OK)
@@ -215,16 +218,17 @@ public class CredentialCatalogController {
      * {@code AccessTokenServiceImpl.getAuthorizationContext()} and are tracked separately,
      * TDG-21).
      *
-     * <p>SysAdmin is exempted, not by omission: a SysAdmin's own token legitimately carries
-     * a different tenant (typically {@code platform}) than the tenant they administer via
-     * {@code X-Tenant} -- that is the accepted cross-tenant convention already used
-     * elsewhere (e.g. {@code RequirePowerRule}'s sysAdmin bypass, TDG-18), not something
-     * this check should break.
+     * <p>No SysAdmin exemption (M2, re-verification: reversed 2026-09-10 — see F2 in
+     * {@code quality-report.md}, formerly kept as an accepted convention). Verified that no
+     * other tenant-match check in the codebase actually exempts SysAdmin: {@code
+     * RequireTenantMatchRule} (the PDP rule used for issuance and revocation) never bypasses
+     * it either, and the SysAdmin bypasses that do exist elsewhere ({@code RequirePowerRule},
+     * {@code RequireOrganizationRule}) only skip a narrower power/organization check that
+     * runs <em>after</em> a genuine tenant match already succeeded. A SysAdmin administering a
+     * tenant other than their own must hold a token whose {@code tenant} claim actually names
+     * it, exactly like everyone else.
      */
     private Mono<AuthorizationContext> requireTenantMatch(AuthorizationContext ctx, String authorizationHeader) {
-        if (ctx.isSysAdmin()) {
-            return Mono.just(ctx);
-        }
         return Mono.deferContextual(reactorCtx -> {
             String tenantDomain = reactorCtx.getOrDefault(TENANT_DOMAIN_CONTEXT_KEY, SYSTEM_TENANT);
             return accessTokenService.getTokenTenant(authorizationHeader)

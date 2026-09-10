@@ -798,21 +798,24 @@ class CredentialCatalogControllerTest {
     }
 
     @Test
-    void getCatalog_asSysAdmin_tenantMismatch_stillReturns200() {
+    void getCatalog_asSysAdmin_tenantMismatch_returns403() {
+        // M2 (re-verification, reversed 2026-09-10): SysAdmin no longer bypasses
+        // requireTenantMatch -- see F2 in quality-report.md. Default stub from
+        // stubTokenTenantMatchesDefault() (SYSTEM_TENANT) would match the default
+        // resolved tenant too, so this test overrides it to force a genuine mismatch.
         when(accessTokenService.getAuthorizationContext(anyString()))
                 .thenReturn(Mono.just(readOnlyAdmin()));
-        when(tenantCredentialProfileService.getCatalog())
-                .thenReturn(Mono.just(List.of(
-                        new CredentialCatalogEntryDto("learcredential.employee.w3c.4", "Employee", true, List.of(), List.of()))));
+        when(accessTokenService.getTokenTenant(anyString()))
+                .thenReturn(Mono.just("other-tenant"));
 
         webTestClient.get()
                 .uri(CREDENTIAL_CATALOG_PATH)
                 .header("Authorization", "Bearer token")
                 .exchange()
-                .expectStatus().isOk();
+                .expectStatus().isForbidden();
 
-        // SysAdmin bypasses the tenant-match check entirely -- never even reads the claim.
-        verify(accessTokenService, never()).getTokenTenant(anyString());
+        verify(tenantCredentialProfileService, never()).getCatalog();
+        verify(auditService).auditFailure(eq("tenant_isolation_breach"), eq("org-1"), anyString(), any());
     }
 
     @Test
@@ -836,12 +839,14 @@ class CredentialCatalogControllerTest {
     }
 
     @Test
-    void updateCatalog_asSysAdmin_tenantMismatch_stillWrites() {
+    void updateCatalog_asSysAdmin_tenantMismatch_returns403AndDoesNotWrite() {
+        // M2 (re-verification, reversed 2026-09-10): SysAdmin no longer bypasses
+        // requireTenantMatch -- see F2 in quality-report.md.
         AuthorizationContext sysAdminActingCrossTenant = new AuthorizationContext("org-1", UserRole.SYSADMIN, false, "tenant");
         when(accessTokenService.getAuthorizationContext(anyString()))
                 .thenReturn(Mono.just(sysAdminActingCrossTenant));
-        when(tenantCredentialProfileService.updateCatalog(any(), any()))
-                .thenReturn(Mono.empty());
+        when(accessTokenService.getTokenTenant(anyString()))
+                .thenReturn(Mono.just("other-tenant"));
 
         webTestClient.mutateWith(csrf())
                 .put()
@@ -850,10 +855,10 @@ class CredentialCatalogControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue("{\"enabledConfigurationIds\":[\"learcredential.employee.w3c.4\"]}")
                 .exchange()
-                .expectStatus().isOk();
+                .expectStatus().isForbidden();
 
-        verify(tenantCredentialProfileService).updateCatalog(any(), any());
-        verify(accessTokenService, never()).getTokenTenant(anyString());
+        verify(tenantCredentialProfileService, never()).updateCatalog(any(), any());
+        verify(auditService).auditFailure(eq("tenant_isolation_breach"), eq("org-1"), anyString(), any());
     }
 
     // --- Authorization-denial audit tests (security review, EUD-169, F3) ---

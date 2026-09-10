@@ -46,6 +46,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`V13`'s legacy-data migration guard now rejects exactly the same non-canonical delivery-mode values its own tightened `CHECK` constraint rejects** (M4) — closes a regression from this Story's own TD-6 fix: a syntactically-valid-but-non-canonical legacy value (e.g. `ui,direct`) previously passed the step-2 guard and only failed later, at the step-4 `CHECK`, with an opaque Postgres constraint violation instead of the guard's intended clear error.
 - **`CredentialCatalogController`'s ad hoc `"unknown"` tenant-context fallback replaced with `Constants.SYSTEM_TENANT`** (L2), the same sentinel this Story's own TD-5 fix already adopted for the identical purpose elsewhere in the codebase.
 
+### Security (EUD-169 — re-verification `/code-review`, M2 — reopens and reverts F2)
+
+- **`CredentialCatalogController.requireTenantMatch()` no longer exempts SysAdmin.** F2 (2026-09-09) had accepted the exemption as "the same convention already used elsewhere (`RequirePowerRule`'s SysAdmin bypass)" — re-verification (M2) found that premise false: `RequireTenantMatchRule`, the PDP rule that actually gates issuance and revocation, never exempts SysAdmin either, and the bypasses that do exist (`RequirePowerRule`, `RequireOrganizationRule`) only skip a narrower power/organization check that runs *after* a genuine tenant match already succeeded. The catalog's own exemption was the only place in the codebase that bypassed the tenant match itself. A SysAdmin administering a tenant other than their own must now hold a token whose `tenant` claim actually names it, exactly like every other role and every other tenant-match check in the platform.
+
+### Tests (EUD-169 — re-verification `/code-review`, TD-3)
+
+- **Added `CredentialCatalogHttpAuthorizationIT`: the catalog's first real HTTP → authentication → authorization → DB integration test with a genuine user JWT** (`LEAR`/operator), closing NFR-S-169-04's remaining coverage gap (previously split across a structural real-DB test, a controller test with a mocked `AuthorizationContext`, and a manual STG smoke — none of which exercised real signature/`iss` verification end-to-end). `PostgresIntegrationBase` gains `mintUserAccessToken`/`mintOperatorAccessToken`, signing through the same `JWTService.issueJWT`/`CryptoComponent.getECKey()` bean `CustomAuthenticationManager` verifies against — reusable by any future IT that needs to test role-based authorization end-to-end, not just this Story's own tests.
+
 ## [3.8.0] - 2026-09-07
 
 ### Fixed
