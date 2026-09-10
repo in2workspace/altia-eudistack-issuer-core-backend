@@ -1,7 +1,7 @@
 package es.in2.issuer.backend.shared.domain.exception;
 
 /**
- * Raised by {@code PATCH /admin/v1/credential-catalog} (AC-11) when a declared
+ * Raised by {@code PATCH /api/v1/backoffice/credential-catalog} (AC-11) when a declared
  * {@code credential_configuration_id} exists in the global registry but is not currently
  * enabled for the tenant. Distinct from {@link UnknownCredentialConfigurationException}
  * (400, "does not exist in any registry") and {@link CredentialCatalogNotConfiguredException}

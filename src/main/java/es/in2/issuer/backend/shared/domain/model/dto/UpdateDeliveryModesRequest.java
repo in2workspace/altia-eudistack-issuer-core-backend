@@ -9,7 +9,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Write payload for {@code PATCH /admin/v1/credential-catalog} (AC-11). Unlike the
+ * Write payload for {@code PATCH /api/v1/backoffice/credential-catalog} (AC-11). Unlike the
  * {@code PUT} sibling ({@link UpdateCredentialCatalogRequest}), this never enables or
  * disables a type: it touches only the delivery modes of the declared
  * {@code credential_configuration_id}s (AD-14).

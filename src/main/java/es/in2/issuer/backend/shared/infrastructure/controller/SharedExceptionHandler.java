@@ -751,7 +751,7 @@ public class SharedExceptionHandler {
         );
     }
 
-    // PATCH /admin/v1/credential-catalog (EUD-169, AD-13): the declared credential_configuration_id
+    // PATCH /api/v1/backoffice/credential-catalog (EUD-169, AD-13): the declared credential_configuration_id
     // exists globally but is not enabled for this tenant -- a state conflict, not a malformed
     // request, hence 409 rather than 400 (same divide AD-7 already drew for the schema ceiling).
     // Security review (F5): handleSafe, not handleWith -- ex.getMessage() embeds the

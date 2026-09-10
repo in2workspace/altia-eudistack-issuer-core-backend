@@ -35,9 +35,10 @@ import static es.in2.issuer.backend.shared.domain.util.Constants.TENANT_DOMAIN_C
 import static es.in2.issuer.backend.shared.domain.util.EndpointsConstants.CREDENTIAL_CATALOG_PATH;
 
 /**
- * Admin API for the per-tenant credential catalog (EUD-72, US-02, EUD-169). The tenant is
+ * Backoffice API for the per-tenant credential catalog (EUD-72, US-02, EUD-169). The tenant is
  * always resolved from the reactive context (subdomain / X-Tenant), never from the request
- * body — see {@code TenantDomainWebFilter}.
+ * body — see {@code TenantDomainWebFilter}. Not an admin-only path (see AD-16): the read side
+ * is also reachable by the tenant's operator role, see the authorization breakdown below.
  *
  * <p>Reads and writes are authorized separately, and since the operator-read delta (AD-16)
  * they no longer share a gate:

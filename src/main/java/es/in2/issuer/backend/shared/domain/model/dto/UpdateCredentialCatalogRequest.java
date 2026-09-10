@@ -9,7 +9,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Write payload for {@code PUT /admin/v1/credential-catalog}. Replaces the full set
+ * Write payload for {@code PUT /api/v1/backoffice/credential-catalog}. Replaces the full set
  * of credential configuration ids enabled for the current tenant, and optionally the
  * delivery modes configured per type.
  *

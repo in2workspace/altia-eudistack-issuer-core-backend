@@ -558,7 +558,7 @@ class CredentialCatalogControllerTest {
         verify(tenantCredentialProfileService, never()).updateCatalog(any(), any());
     }
 
-    // ---- PATCH /admin/v1/credential-catalog (AC-11) ----------------------------
+    // ---- PATCH /api/v1/backoffice/credential-catalog (AC-11) ----------------------------
 
     @Test
     void patchDeliveryModes_asTenantAdmin_returns200() {

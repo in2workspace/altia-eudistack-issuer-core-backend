@@ -34,6 +34,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added a second credential profile fixture (`gx.labelcredential.w3c.2`, unbound) to the test classpath so `CredentialCatalogTransactionalIT` can build a genuinely mixed multi-type payload against a real Postgres: concurrent writes now prove the type neither one declared survives untouched (ES-04), and a `PATCH` mixing an enabled type with a known-but-not-enabled one now proves the whole operation aborts, including for the type that was already enabled (ES-10). Both were previously evidenced only indirectly (partial single-type real-DB tests + mocked multi-id unit tests). No production behavior change.
 
+### Changed (EUD-169 — re-verification `/code-review`, H1)
+
+- **`GET`/`PUT`/`PATCH /admin/v1/credential-catalog` renamed to `.../api/v1/backoffice/credential-catalog`.** Pure path rename, no authorization or response-shape change (`EndpointsConstants.CREDENTIAL_CATALOG_PATH`): re-verification (H1) found the `/admin` prefix misleading now that AD-16 opened `GET` to the tenant's operator (`LEAR`) role as well as tenant-admin/SysAdmin — the path implied an admin-only surface the endpoint had already stopped being. Reverts to this application's own pre-existing convention for this functional area: the retired `DeliveryConfigController` (superseded by this Story, see the `Removed` entry above) used `/api/v1/backoffice/delivery-config/{credentialConfigurationId}` for an even more restricted (fully admin-only) predecessor. No change to who can call the endpoint — still authenticated-only, `GET` still returns the full registry (enabled and disabled ids, needed by the settings UI to render both states), `PUT`/`PATCH` still tenant-admin/SysAdmin-only.
+- **Risk-acceptance (H1, same treatment already given to F1/F7/F8/F9)**: the underlying gap the path rename does not close — any authenticated organization can obtain a token genuinely valid for another tenant via that tenant's own public OIDC login client, and use it to read that tenant's catalog, because no org↔tenant membership check exists anywhere in the platform yet — is accepted as-is for this Story. See `technical-design.md` AD-16 and `quality-report.md` for the documented PO risk-acceptance and scope boundary.
+
 ## [3.8.0] - 2026-09-07
 
 ### Fixed
