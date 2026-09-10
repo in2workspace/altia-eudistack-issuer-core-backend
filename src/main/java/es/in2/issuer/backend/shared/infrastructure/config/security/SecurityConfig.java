@@ -44,9 +44,9 @@ public class SecurityConfig {
                         ISSUANCES_WILDCARD_PATH,
                         // Current caller role resolution (for frontends)
                         ME_PATH,
-                        // Tenant admin delivery-config management (EUD-169)
-                        DELIVERY_CONFIG_PATH,
-                        // Tenant credential catalog admin (EUD-72)
+                        // Tenant credential catalog (EUD-72, EUD-169) -- not admin-only, see
+                        // CredentialCatalogController's own authorization (tenant-admin/SysAdmin
+                        // write, tenant-admin/SysAdmin/operator read)
                         CREDENTIAL_CATALOG_PATH,
                         // OID4VCI paths
                         OAUTH_TOKEN_PATH,
@@ -102,9 +102,9 @@ public class SecurityConfig {
                         ISSUANCES_WILDCARD_PATH,
                         // Current caller role resolution
                         ME_PATH,
-                        // Tenant admin delivery-config management (EUD-169)
-                        DELIVERY_CONFIG_PATH,
-                        // Tenant credential catalog admin (EUD-72)
+                        // Tenant credential catalog (EUD-72, EUD-169) -- not admin-only, see
+                        // CredentialCatalogController's own authorization (tenant-admin/SysAdmin
+                        // write, tenant-admin/SysAdmin/operator read)
                         CREDENTIAL_CATALOG_PATH,
                         // Public OID4VCI paths
                         CORS_OID4VCI_PATH,

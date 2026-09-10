@@ -420,13 +420,16 @@ public class SharedExceptionHandler {
         );
     }
 
+    // Security review (N1, re-verification): handleSafe, not handleWith -- ex.getMessage()
+    // embeds the caller-supplied tokenTenant/resolved-tenant values verbatim (see
+    // CredentialCatalogController.requireTenantMatch / RequireTenantMatchRule).
     @ExceptionHandler(TenantMismatchException.class)
     @ResponseStatus(HttpStatus.FORBIDDEN)
     public Mono<GlobalErrorMessage> handleTenantMismatchException(
             TenantMismatchException ex,
             ServerHttpRequest request
     ) {
-        return errors.handleWith(
+        return errors.handleSafe(
                 ex, request,
                 GlobalErrorTypes.TENANT_MISMATCH.getCode(),
                 "Tenant mismatch",
@@ -535,13 +538,16 @@ public class SharedExceptionHandler {
         );
     }
 
+    // Security review (F4): handleSafe, not handleWith -- ex.getMessage() echoes the
+    // caller-supplied credential_configuration_id(s) verbatim; @Size/@Pattern on the DTO
+    // now bounds them, but the client-facing detail must not depend on that staying true.
     @ExceptionHandler(UnknownCredentialConfigurationException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public Mono<GlobalErrorMessage> handleUnknownCredentialConfiguration(
             UnknownCredentialConfigurationException ex,
             ServerHttpRequest request
     ) {
-        return errors.handleWith(
+        return errors.handleSafe(
                 ex, request,
                 GlobalErrorTypes.UNKNOWN_CREDENTIAL_CONFIGURATION.getCode(),
                 "Unknown credential configuration",
@@ -730,24 +736,9 @@ public class SharedExceptionHandler {
         );
     }
 
-    @ExceptionHandler(DeliveryConfigProfileNotFoundException.class)
-    @ResponseStatus(HttpStatus.NOT_FOUND)
-    public Mono<GlobalErrorMessage> handleDeliveryConfigProfileNotFoundException(
-            DeliveryConfigProfileNotFoundException ex,
-            ServerHttpRequest request
-    ) {
-        return errors.handleWith(
-                ex, request,
-                GlobalErrorTypes.DELIVERY_CONFIG_PROFILE_NOT_FOUND.getCode(),
-                "Delivery config profile not found",
-                HttpStatus.NOT_FOUND,
-                "The given credential_configuration_id is unknown or not enabled for this tenant"
-        );
-    }
-
     // Shared rather than issuance-only (EUD-168 code review): thrown from both the issuance path
-    // (SchemaDeliveryCeiling.validateWithinCeiling) and the backoffice delivery-config PUT
-    // (TenantDeliveryConfigServiceImpl), matching where the exception class itself lives.
+    // (SchemaDeliveryCeiling.validateWithinCeiling) and the credential-catalog PUT
+    // (TenantCredentialProfileServiceImpl, EUD-169), matching where the exception class itself lives.
     @ExceptionHandler(DeliveryModeNotEligibleException.class)
     @ResponseStatus(HttpStatus.CONFLICT)
     public Mono<GlobalErrorMessage> handleDeliveryModeNotEligibleException(
@@ -760,6 +751,28 @@ public class SharedExceptionHandler {
                 "Delivery mode not eligible",
                 HttpStatus.CONFLICT,
                 "The declared delivery mode is not eligible for this credential type"
+        );
+    }
+
+    // TenantCredentialProfileServiceImpl#findConfiguredDeliveryModes (EUD-169, F6): the declared
+    // credential_configuration_id exists globally but is not enabled for this tenant -- a state
+    // conflict, not a malformed request, hence 409 rather than 400 (same divide AD-7 already drew
+    // for the schema ceiling).
+    // Security review (F5): handleSafe, not handleWith -- ex.getMessage() embeds the
+    // caller-supplied credential_configuration_id verbatim; §9.1 forbids passing exception
+    // messages to the client regardless of today's actual risk (F4 already bounds the id).
+    @ExceptionHandler(CredentialConfigurationNotEnabledException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public Mono<GlobalErrorMessage> handleCredentialConfigurationNotEnabledException(
+            CredentialConfigurationNotEnabledException ex,
+            ServerHttpRequest request
+    ) {
+        return errors.handleSafe(
+                ex, request,
+                GlobalErrorTypes.CREDENTIAL_CONFIGURATION_NOT_ENABLED.getCode(),
+                "Credential configuration not enabled",
+                HttpStatus.CONFLICT,
+                "The declared credential configuration id is not enabled for this tenant"
         );
     }
 }

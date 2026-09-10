@@ -22,6 +22,9 @@ public record TenantCredentialProfile(
         Instant createdAt,
 
         @Column("updated_at")
-        Instant updatedAt
+        Instant updatedAt,
+
+        @Column("delivery_modes")
+        String deliveryModes
 ) {
 }

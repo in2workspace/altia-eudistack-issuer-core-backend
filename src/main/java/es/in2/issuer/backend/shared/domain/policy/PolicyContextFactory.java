@@ -12,6 +12,7 @@ import es.in2.issuer.backend.shared.domain.service.JWTService;
 import es.in2.issuer.backend.shared.domain.service.TenantConfigService;
 import es.in2.issuer.backend.shared.domain.service.TenantRegistryService;
 import es.in2.issuer.backend.shared.domain.model.port.IssuerProperties;
+import es.in2.issuer.backend.shared.domain.util.TenantIdentifiers;
 import es.in2.issuer.backend.shared.infrastructure.config.CredentialProfileRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -143,11 +144,16 @@ public class PolicyContextFactory {
     /**
      * Extracts the tenant claim from the token payload.
      * The verifier injects this claim based on the OIDC client's tenant configuration.
+     *
+     * <p>Normalized the same way {@code TenantDomainWebFilter} already normalizes the resolved
+     * tenant side (M3, re-verification): a legacy env-suffixed claim (e.g. {@code "sandbox-stg"})
+     * must not fail {@link es.in2.issuer.backend.shared.domain.policy.rules.RequireTenantMatchRule}'s
+     * comparison on formatting alone.
      */
     private String extractTokenTenant(com.nimbusds.jose.Payload payload) {
         try {
             String raw = jwtService.getClaimFromPayload(payload, TENANT_CLAIM);
-            return stripJsonQuotes(raw);
+            return TenantIdentifiers.stripEnvSuffix(stripJsonQuotes(raw));
         } catch (Exception e) {
             log.debug("No tenant claim found in token: {}", e.getMessage());
             return null;

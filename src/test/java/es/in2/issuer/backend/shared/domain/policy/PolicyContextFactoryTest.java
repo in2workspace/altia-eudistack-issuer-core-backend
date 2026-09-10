@@ -127,6 +127,27 @@ class PolicyContextFactoryTest {
     }
 
     @Test
+    void fromTokenSimple_tokenTenantWithLegacyEnvSuffix_isStripped() {
+        // M3 (re-verification): normalized the same way TenantDomainWebFilter already
+        // normalizes the resolved-tenant side, so a legacy env-suffixed claim doesn't fail
+        // RequireTenantMatchRule's comparison on formatting alone.
+        SignedJWT signedJWT = mock(SignedJWT.class);
+        Payload payload = mock(Payload.class);
+
+        when(jwtService.parseJWT(TOKEN)).thenReturn(signedJWT);
+        when(signedJWT.getPayload()).thenReturn(payload);
+
+        setupFlatTokenClaims(payload, CREDENTIAL_TYPE, "ORG-123", "DOME-stg");
+
+        CredentialProfile profile = buildProfile(CREDENTIAL_TYPE);
+        when(credentialProfileRegistry.resolveProfile(CREDENTIAL_TYPE)).thenReturn(profile);
+
+        StepVerifier.create(factory.fromTokenSimple(TOKEN, "DOME"))
+                .assertNext(ctx -> assertThat(ctx.tokenTenant()).isEqualTo("DOME"))
+                .verifyComplete();
+    }
+
+    @Test
     void fromTokenSimple_tokenTenantIsNullWhenClaimAbsent() {
         SignedJWT signedJWT = mock(SignedJWT.class);
         Payload payload = mock(Payload.class);

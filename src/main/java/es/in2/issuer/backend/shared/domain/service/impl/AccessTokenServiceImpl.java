@@ -12,6 +12,7 @@ import es.in2.issuer.backend.shared.domain.service.AccessTokenService;
 import es.in2.issuer.backend.shared.domain.service.TenantConfigService;
 import es.in2.issuer.backend.shared.domain.model.port.IssuerProperties;
 import es.in2.issuer.backend.shared.domain.service.TenantRegistryService;
+import es.in2.issuer.backend.shared.domain.util.TenantIdentifiers;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.context.ReactiveSecurityContextHolder;
@@ -86,6 +87,20 @@ public class AccessTokenServiceImpl implements AccessTokenService {
                     )
                     .switchIfEmpty(Mono.error(new InvalidTokenException()));
         });
+    }
+
+    @Override
+    public Mono<String> getTokenTenant(String authorizationHeader) {
+        return getCleanBearerToken(authorizationHeader)
+                .flatMap(token -> Mono.fromCallable(() -> {
+                    JsonNode root = parseTokenPayload(token);
+                    JsonNode tenantNode = root.get("tenant");
+                    String tenant = tenantNode != null && !tenantNode.isNull() ? tenantNode.asText() : null;
+                    // M3 (re-verification): normalize the same way TenantDomainWebFilter already
+                    // normalizes the resolved tenant side, so a legacy env-suffixed claim (e.g.
+                    // "sandbox-stg") doesn't fail requireTenantMatch's comparison on formatting alone.
+                    return TenantIdentifiers.stripEnvSuffix(tenant);
+                }).onErrorMap(e -> e instanceof InvalidTokenException ? e : new InvalidTokenException()));
     }
 
     private record TokenInfo(JsonNode root, String orgId) {}

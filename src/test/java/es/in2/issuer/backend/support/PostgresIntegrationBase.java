@@ -1,5 +1,8 @@
 package es.in2.issuer.backend.support;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import es.in2.issuer.backend.shared.domain.service.JWTService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
@@ -14,6 +17,9 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import reactor.core.publisher.Mono;
 
 import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 
 import static es.in2.issuer.backend.shared.domain.util.Constants.SCHEMA_SUFFIX;
 import static es.in2.issuer.backend.shared.domain.util.Constants.X_TENANT_HEADER;
@@ -68,6 +74,12 @@ public abstract class PostgresIntegrationBase {
     @Autowired
     protected PasswordEncoder apiClientPasswordEncoder;
 
+    @Autowired
+    protected JWTService jwtService;
+
+    @Autowired
+    protected ObjectMapper objectMapper;
+
     protected WebTestClient webTestClient() {
         return WebTestClient.bindToServer()
                 .baseUrl("http://localhost:" + port + "/issuer")
@@ -100,5 +112,44 @@ public abstract class PostgresIntegrationBase {
                         .with("client_id", clientId)
                         .with("client_secret", clientSecret))
                 .exchange();
+    }
+
+    /**
+     * Mints a real, ES256-signed user access token (TD-3 / TDG-24): signed through
+     * {@link JWTService#issueJWT} using the exact same {@code CryptoComponent.getECKey()}
+     * bean {@code CustomAuthenticationManager} verifies against, with {@code iss} set to
+     * this test server's own public issuer base URL -- a token minted this way is
+     * genuinely accepted by the running application's real authentication filter, not a
+     * hand-crafted unsigned token injected past it. Lets an IT drive the actual
+     * HTTP -> authentication -> authorization -> DB path for a real user role
+     * (TENANT_ADMIN / LEAR), which no fixture in this base class could do before --
+     * {@link #requestToken} only covers the M2M {@code client_credentials} grant.
+     *
+     * <p>Role resolution ({@code AccessTokenServiceImpl.resolveRole}) is driven entirely
+     * by the claims here: an empty {@code powers} list with an {@code organizationIdentifier}
+     * that doesn't match the tenant's {@code admin_organization_id} resolves to {@code LEAR};
+     * matching org id plus the tenant's Onboarding/Execute domain power resolves to
+     * {@code TENANT_ADMIN}.
+     */
+    protected String mintUserAccessToken(String tenantClaim, String organizationIdentifier,
+                                         List<Map<String, Object>> powers) {
+        long now = Instant.now().getEpochSecond();
+        ObjectNode payload = objectMapper.createObjectNode();
+        payload.put("iss", "http://localhost:" + port + "/issuer");
+        payload.put("sub", "it-user-" + organizationIdentifier);
+        payload.put("iat", now);
+        payload.put("exp", now + 3600);
+        ObjectNode mandator = payload.putObject("mandator");
+        mandator.put("organizationIdentifier", organizationIdentifier);
+        payload.set("power", objectMapper.valueToTree(powers));
+        payload.put("tenant", tenantClaim);
+        return jwtService.issueJWT(payload.toString());
+    }
+
+    /** {@link #mintUserAccessToken(String, String, List)} with no powers -- the shape that
+     *  always resolves to {@code LEAR} (the operator role), since it never matches
+     *  {@code TENANT_ADMIN}'s org+power requirement nor SysAdmin's power. */
+    protected String mintOperatorAccessToken(String tenantClaim, String organizationIdentifier) {
+        return mintUserAccessToken(tenantClaim, organizationIdentifier, List.of());
     }
 }

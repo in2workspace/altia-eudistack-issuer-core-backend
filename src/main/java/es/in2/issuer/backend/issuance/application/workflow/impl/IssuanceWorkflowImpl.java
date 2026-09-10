@@ -30,7 +30,6 @@ import es.in2.issuer.backend.shared.domain.model.dto.credential.profile.HolderBi
 import es.in2.issuer.backend.shared.domain.service.SchemaDeliveryCeiling;
 import es.in2.issuer.backend.shared.domain.exception.DeliveryModeNotEligibleException;
 import es.in2.issuer.backend.issuance.domain.exception.InvalidDeliveryModeException;
-import es.in2.issuer.backend.shared.domain.service.TenantConfigService;
 import es.in2.issuer.backend.statuslist.application.StatusListWorkflow;
 import es.in2.issuer.backend.statuslist.domain.model.StatusListFormat;
 import es.in2.issuer.backend.statuslist.domain.model.StatusPurpose;
@@ -44,7 +43,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.ArrayList;
-import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -62,7 +60,6 @@ public class IssuanceWorkflowImpl implements IssuanceWorkflow {
 
     private static final String DEFAULT_GRANT_TYPE = "authorization_code";
     private static final String DEFAULT_DELIVERY = "email";
-    private static final String DELIVERY_MODES_CONFIG_PREFIX = "issuer.delivery.modes.";
 
     private final IssuanceService issuanceService;
     private final CredentialOfferService credentialOfferService;
@@ -75,7 +72,7 @@ public class IssuanceWorkflowImpl implements IssuanceWorkflow {
     private final GenericCredentialBuilder genericCredentialBuilder;
     private final CredentialSignerWorkflow credentialSignerWorkflow;
     private final StatusListWorkflow statusListWorkflow;
-    private final TenantConfigService tenantConfigService;
+    private final DeliveryEligibilityResolver deliveryEligibilityResolver;
     private final IssuanceProperties issuanceProperties;
     private final SchemaDeliveryCeiling schemaDeliveryCeiling;
     private final HolderDidFallbackAuditor holderDidFallbackAuditor;
@@ -246,40 +243,27 @@ public class IssuanceWorkflowImpl implements IssuanceWorkflow {
             return Mono.error(new InvalidDeliveryModeException(ex.getMessage()));
         }
 
-        // The schema ceiling is checked first and unconditionally: no stored configuration can widen it,
-        // so a configuration predating this rule cannot resurrect direct delivery for a bound type.
+        // Fast-path, no longer strictly necessary (the resolver below applies the same ceiling
+        // intersection): keeps a configuration predating the ceiling from silently resurrecting
+        // direct delivery for a bound type without waiting on the resolver's round trip.
         try {
             schemaDeliveryCeiling.validateWithinCeiling(configId, modes);
         } catch (DeliveryModeNotEligibleException ex) {
             return Mono.error(ex);
         }
 
-        Set<DeliveryMode> ceiling = schemaDeliveryCeiling.resolveEligibleModes(configId);
-        String defaultEligible = DeliveryMode.toCanonicalCsv(ceiling);
-        return tenantConfigService.getStringOrDefault(DELIVERY_MODES_CONFIG_PREFIX + configId, defaultEligible)
-                .map(csv -> Arrays.stream(csv.split(","))
-                        .map(String::trim)
-                        .filter(s -> !s.isEmpty())
-                        .collect(Collectors.toSet()))
-                .flatMap(eligibleValues -> {
-                    // The effective set is what the error message must report: the schema ceiling alone
-                    // overstates what is actually available whenever tenant configuration narrows it
-                    // further, which would mislead the caller about what to retry with.
-                    Set<DeliveryMode> effectiveEligible = ceiling.stream()
-                            .filter(mode -> eligibleValues.contains(mode.value))
-                            .collect(Collectors.toCollection(() -> EnumSet.noneOf(DeliveryMode.class)));
-                    String effectiveEligibleCsv = effectiveEligible.isEmpty()
-                            ? "none"
-                            : DeliveryMode.toCanonicalCsv(effectiveEligible);
+        // Single point of resolution (AD-5): the same seam the admin-facing catalog reads from
+        // (EUD-169), so issuance can never reject a mode the catalog promised, or accept one the
+        // catalog would have rejected. Any error/timeout propagates untouched -- fail-closed,
+        // ES-09: no onErrorReturn/onErrorResume default.
+        return deliveryEligibilityResolver.resolveEligibleModes(configId)
+                .flatMap(eligible -> {
                     for (DeliveryMode mode : modes) {
-                        // Tenant configuration narrows the ceiling, never widens it: a mode must clear
-                        // both. The ceiling was already checked above, so this can only reject a mode the
-                        // tenant itself has disabled.
-                        if (!eligibleValues.contains(mode.value) || !ceiling.contains(mode)) {
+                        if (!eligible.contains(mode)) {
                             return Mono.error(new DeliveryModeNotEligibleException(
                                     "Delivery mode '" + mode.value + "' is not eligible for credential type '"
                                             + configId + "'. Eligible modes: "
-                                            + effectiveEligibleCsv));
+                                            + (eligible.isEmpty() ? "none" : DeliveryMode.toCanonicalCsv(eligible))));
                         }
                     }
                     return Mono.just(modes);
