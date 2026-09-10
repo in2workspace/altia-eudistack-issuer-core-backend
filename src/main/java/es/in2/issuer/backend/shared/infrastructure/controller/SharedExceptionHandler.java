@@ -754,9 +754,10 @@ public class SharedExceptionHandler {
         );
     }
 
-    // PATCH /api/v1/backoffice/credential-catalog (EUD-169, AD-13): the declared credential_configuration_id
-    // exists globally but is not enabled for this tenant -- a state conflict, not a malformed
-    // request, hence 409 rather than 400 (same divide AD-7 already drew for the schema ceiling).
+    // TenantCredentialProfileServiceImpl#findConfiguredDeliveryModes (EUD-169, F6): the declared
+    // credential_configuration_id exists globally but is not enabled for this tenant -- a state
+    // conflict, not a malformed request, hence 409 rather than 400 (same divide AD-7 already drew
+    // for the schema ceiling).
     // Security review (F5): handleSafe, not handleWith -- ex.getMessage() embeds the
     // caller-supplied credential_configuration_id verbatim; §9.1 forbids passing exception
     // messages to the client regardless of today's actual risk (F4 already bounds the id).

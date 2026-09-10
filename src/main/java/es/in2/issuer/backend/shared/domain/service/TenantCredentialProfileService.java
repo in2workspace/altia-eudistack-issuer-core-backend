@@ -77,14 +77,4 @@ public interface TenantCredentialProfileService {
      */
     Mono<Void> updateCatalog(Set<String> enabledConfigurationIds, Map<String, Set<DeliveryMode>> deliveryModesByConfigurationId);
 
-    /**
-     * Updates only the delivery modes for exactly the {@code credential_configuration_id}s
-     * declared in {@code deliveryModesByConfigurationId} (AC-11) -- an already-enabled type
-     * not declared here is neither read nor touched (EC-10), and this operation can never
-     * enable a type as a side effect (AD-14). Rejects the entire operation atomically, with
-     * nothing written even for the ids that were enabled, if any declared id is not
-     * currently enabled for the tenant (ES-10).
-     */
-    Mono<Void> updateDeliveryModes(Map<String, Set<DeliveryMode>> deliveryModesByConfigurationId);
-
 }

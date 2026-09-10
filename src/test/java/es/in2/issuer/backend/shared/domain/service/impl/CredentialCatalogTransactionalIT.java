@@ -1,7 +1,6 @@
 package es.in2.issuer.backend.shared.domain.service.impl;
 
 import es.in2.issuer.backend.shared.domain.exception.CredentialCatalogNotConfiguredException;
-import es.in2.issuer.backend.shared.domain.exception.CredentialConfigurationNotEnabledException;
 import es.in2.issuer.backend.shared.domain.model.dto.CredentialCatalogEntryDto;
 import es.in2.issuer.backend.shared.domain.model.entities.TenantCredentialProfile;
 import es.in2.issuer.backend.shared.domain.model.enums.DeliveryMode;
@@ -286,74 +285,6 @@ class CredentialCatalogTransactionalIT extends PostgresIntegrationBase {
                 .get().uri("/api/v1/backoffice/delivery-config/" + configId)
                 .exchange()
                 .expectStatus().isNotFound();
-    }
-
-    /**
-     * ES-10, against a real DB: a declared credential_configuration_id known to the
-     * registry but not currently enabled for the tenant is rejected atomically -- and
-     * because the write is a plain {@code UPDATE} (AD-14), there is structurally nothing
-     * to roll back: the row count stays at zero, the type is not silently enabled as a
-     * side effect of the failed PATCH.
-     */
-    @Test
-    void updateDeliveryModes_ccidNotEnabled_rejectsAndCreatesNoRow() {
-        StepVerifier.create(service.updateDeliveryModes(Map.of(configId, Set.of(DeliveryMode.EMAIL)))
-                        .contextWrite(ctx(TENANT_A)))
-                .expectError(CredentialConfigurationNotEnabledException.class)
-                .verify();
-
-        List<TenantCredentialProfile> rows =
-                repository.findAllByEnabledTrue().collectList().contextWrite(ctx(TENANT_A)).block();
-        assertThat(rows).isEmpty();
-    }
-
-    /**
-     * ES-10 (TD-4, now closed against a real DB): mixing one already-enabled id with a
-     * distinct, known-but-not-enabled one rejects the whole operation atomically --
-     * "el sistema MUST NOT persistir ninguna parte de la petición, tampoco los modos de
-     * los tipos que sí estaban habilitados". {@code configId} is enabled and declares a
-     * change; {@code SECOND_CONFIG_ID} is known to the registry but never enabled for
-     * this tenant. Complements the unit-level, mocked coverage of the same clause
-     * ({@code TenantCredentialProfileServiceImplTest#updateDeliveryModes_oneIdNotEnabled_rejectsAndWritesNothingElse}).
-     */
-    @Test
-    void updateDeliveryModes_mixedEnabledAndNotEnabled_rejectsAtomicallyWritingNothing() {
-        service.updateCatalog(Set.of(configId)).contextWrite(ctx(TENANT_A)).block();
-
-        StepVerifier.create(service.updateDeliveryModes(Map.of(
-                                configId, Set.of(DeliveryMode.EMAIL),
-                                SECOND_CONFIG_ID, Set.of(DeliveryMode.UI)))
-                        .contextWrite(ctx(TENANT_A)))
-                .expectError(CredentialConfigurationNotEnabledException.class)
-                .verify();
-
-        List<TenantCredentialProfile> rows =
-                repository.findAllByEnabledTrue().collectList().contextWrite(ctx(TENANT_A)).block();
-        assertThat(rows).hasSize(1);
-        assertThat(rows.getFirst().credentialConfigurationId()).isEqualTo(configId);
-        assertThat(rows.getFirst().deliveryModes())
-                .as("the enabled type's own declared change must not land either -- the whole operation aborted")
-                .isNull();
-    }
-
-    /**
-     * EC-10, against a real DB: a successful PATCH on an already-enabled catalog leaves
-     * the set of enabled types and the row count exactly as they were -- the point
-     * adjustment is a pure {@code UPDATE} on the existing row, never an insert or a
-     * prune.
-     */
-    @Test
-    void updateDeliveryModes_success_leavesEnabledSetAndRowCountUnchanged() {
-        service.updateCatalog(Set.of(configId)).contextWrite(ctx(TENANT_A)).block();
-
-        service.updateDeliveryModes(Map.of(configId, Set.of(DeliveryMode.EMAIL, DeliveryMode.UI)))
-                .contextWrite(ctx(TENANT_A)).block();
-
-        List<TenantCredentialProfile> rows =
-                repository.findAllByEnabledTrue().collectList().contextWrite(ctx(TENANT_A)).block();
-        assertThat(rows).extracting(TenantCredentialProfile::credentialConfigurationId)
-                .containsExactly(configId);
-        assertThat(rows.getFirst().deliveryModes()).isEqualTo("email,ui");
     }
 
     private CredentialCatalogEntryDto entry(List<CredentialCatalogEntryDto> catalog) {

@@ -152,55 +152,12 @@ public class TenantCredentialProfileServiceImpl implements TenantCredentialProfi
     }
 
     /**
-     * Point adjustment (AC-11): unlike {@link #updateCatalog}, this never enables or
-     * disables a type -- it writes exactly the {@code credential_configuration_id}s
-     * declared, each via {@code UPDATE ... WHERE enabled = true} (AD-14), so the
-     * habilitation check <em>is</em> the write itself (no separate read, no TOCTOU window
-     * against the Caffeine cache). Written in ascending {@code ccid} order (W-7) to avoid
-     * a lock-ordering deadlock against a concurrent {@code PUT}/{@code PATCH} on an
-     * overlapping set. A {@code rowsAffected == 0} for any declared id aborts the whole
-     * transaction (ES-10): nothing is left written, not even for the ids that were
-     * enabled.
-     */
-    @Override
-    public Mono<Void> updateDeliveryModes(Map<String, Set<DeliveryMode>> deliveryModesByConfigurationId) {
-        Mono<Void> validation = Mono.fromRunnable(() -> validateDeliveryModesUpdate(deliveryModesByConfigurationId));
-
-        return validation.then(Mono.deferContextual(ctx -> {
-            String tenant = requireTenant(ctx);
-            Instant now = Instant.now();
-
-            Mono<Void> write = Flux.fromIterable(deliveryModesByConfigurationId.keySet().stream().sorted().toList())
-                    .concatMap(id -> repository.updateDeliveryModesIfEnabled(
-                                    id, DeliveryMode.toCanonicalCsv(deliveryModesByConfigurationId.get(id)), now)
-                            .flatMap(rowsAffected -> rowsAffected == 0
-                                    ? Mono.error(new CredentialConfigurationNotEnabledException(
-                                            "Credential configuration id '" + id + "' is not enabled for this tenant"))
-                                    : Mono.just(rowsAffected)))
-                    .then();
-
-            return transactionalOperator.transactional(write)
-                    .doOnSuccess(v -> {
-                        cache.invalidate(tenant);
-                        log.info("Delivery modes patched for tenant '{}': {} type(s)",
-                                tenant, deliveryModesByConfigurationId.size());
-                    });
-        }));
-    }
-
-    /**
      * Validates, in this strict order, before any transaction opens: (1) every enabled id is
      * known to the registry -- must run before touching {@link SchemaDeliveryCeiling}, which
      * throws an unchecked, unhandled {@link IllegalStateException} (→ generic 500) for an
      * unknown id; (2) every id declaring delivery modes is among the enabled ids (ES-03); (3)
      * each declared set of modes is within that type's schema ceiling (AC-04 → 409, via
      * {@link #validateWithinCeiling}).
-     *
-     * <p>{@code validateKnownToRegistry} then {@code validateWithinCeiling} is the same
-     * registry-before-ceiling pair {@link #validateDeliveryModesUpdate} composes (code review
-     * W2): the two named steps, not an inlined check, are what keeps them in lockstep -- a
-     * third shared validation step is added to both by calling it from here, in between if
-     * order-sensitive like ES-03, without re-deriving the registry/ceiling pairing twice.
      */
     private void validateUpdateRequest(Set<String> enabledConfigurationIds, Map<String, Set<DeliveryMode>> deliveryModesByConfigurationId) {
         validateKnownToRegistry(enabledConfigurationIds);
@@ -213,19 +170,6 @@ public class TenantCredentialProfileServiceImpl implements TenantCredentialProfi
                     "Delivery modes declared for credential configuration id(s) not enabled in this request: " + notEnabled);
         }
 
-        validateWithinCeiling(deliveryModesByConfigurationId);
-    }
-
-    /**
-     * Same registry-before-ceiling pair as {@link #validateUpdateRequest} (AD-14): the
-     * declared ids must be known to the registry before {@link SchemaDeliveryCeiling} is
-     * consulted, or an unknown id degrades from 400 to an unhandled 500. There is no
-     * {@code enabledConfigurationIds} to cross-check against here -- whether a known id
-     * is actually enabled for this tenant is verified by the write itself (ES-10) -- so
-     * nothing needs to run between the two steps.
-     */
-    private void validateDeliveryModesUpdate(Map<String, Set<DeliveryMode>> deliveryModesByConfigurationId) {
-        validateKnownToRegistry(deliveryModesByConfigurationId.keySet());
         validateWithinCeiling(deliveryModesByConfigurationId);
     }
 

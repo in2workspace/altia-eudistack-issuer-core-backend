@@ -5,7 +5,6 @@ import es.in2.issuer.backend.shared.domain.exception.TenantMismatchException;
 import es.in2.issuer.backend.shared.domain.model.dto.AuthorizationContext;
 import es.in2.issuer.backend.shared.domain.model.dto.CredentialCatalogEntryDto;
 import es.in2.issuer.backend.shared.domain.model.dto.UpdateCredentialCatalogRequest;
-import es.in2.issuer.backend.shared.domain.model.dto.UpdateDeliveryModesRequest;
 import es.in2.issuer.backend.shared.domain.model.enums.DeliveryMode;
 import es.in2.issuer.backend.shared.domain.service.AccessTokenService;
 import es.in2.issuer.backend.shared.domain.service.AuditService;
@@ -16,7 +15,6 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -48,7 +46,7 @@ import static es.in2.issuer.backend.shared.domain.util.EndpointsConstants.CREDEN
  *         SysAdmin (including the cross-tenant read-only view from {@code platform}), or
  *         the tenant's operator ({@code LEAR}), who needs to discover a type's eligible
  *         delivery modes and schema ceiling before attempting to issue it.</li>
- *     <li><b>PUT</b>/<b>PATCH</b> independently require {@code isTenantAdmin()} <b>and</b>
+ *     <li><b>PUT</b> independently requires {@code isTenantAdmin()} <b>and</b>
  *         {@code canWrite()} — checked without delegating to the read gate, so relaxing the
  *         read side can never relax the write side as a side effect.</li>
  * </ul>
@@ -73,7 +71,6 @@ public class CredentialCatalogController {
     private static final String AUDIT_EVENT = "tenant.credential_catalog.changed";
     private static final String AUDIT_RESOURCE_TYPE = "credential-catalog";
     private static final String ACTION_REPLACE_CATALOG = "replace_catalog";
-    private static final String ACTION_PATCH_DELIVERY_MODES = "patch_delivery_modes";
     private static final String AUDIT_EVENT_TENANT_BREACH = "tenant_isolation_breach";
     private static final String AUDIT_EVENT_AUTHZ_DENY = "authorization.deny";
 
@@ -112,33 +109,6 @@ public class CredentialCatalogController {
                                             "enabledConfigurationIds", request.enabledConfigurationIds(),
                                             "deliveryModesByConfigurationId",
                                             request.deliveryModesByConfigurationId() == null ? Map.of() : request.deliveryModesByConfigurationId(),
-                                            "sysAdmin", ctx.isSysAdmin())))
-                            .doOnError(e -> auditService.auditFailure(AUDIT_EVENT, ctx.organizationIdentifier(),
-                                    e.getClass().getSimpleName(), Map.of("tenant", tenant)));
-                }));
-    }
-
-    /**
-     * Point adjustment (AC-11): touches only the declared {@code credential_configuration_id}s,
-     * never enables or disables a type (EC-10, AD-14). Same authorization gate as the
-     * {@code PUT} above, and the same audit event with a discriminating {@code action}
-     * (AD-15) so a single filter answers "who changed this tenant's delivery-mode policy
-     * and when" regardless of which endpoint they used.
-     */
-    @PatchMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
-    @ResponseStatus(HttpStatus.OK)
-    public Mono<Void> patchDeliveryModes(
-            @RequestHeader(HttpHeaders.AUTHORIZATION) String authorizationHeader,
-            @Valid @RequestBody UpdateDeliveryModesRequest request) {
-        return authorizeTenantAdminWrite(authorizationHeader)
-                .flatMap(ctx -> Mono.deferContextual(reactorCtx -> {
-                    String tenant = reactorCtx.getOrDefault(TENANT_DOMAIN_CONTEXT_KEY, SYSTEM_TENANT);
-                    return tenantCredentialProfileService.updateDeliveryModes(
-                                    parseDeliveryModes(request.deliveryModesByConfigurationId()))
-                            .doOnSuccess(v -> auditService.auditSuccess(AUDIT_EVENT, ctx.organizationIdentifier(),
-                                    AUDIT_RESOURCE_TYPE, tenant, Map.of(
-                                            "action", ACTION_PATCH_DELIVERY_MODES,
-                                            "deliveryModesByConfigurationId", request.deliveryModesByConfigurationId(),
                                             "sysAdmin", ctx.isSysAdmin())))
                             .doOnError(e -> auditService.auditFailure(AUDIT_EVENT, ctx.organizationIdentifier(),
                                     e.getClass().getSimpleName(), Map.of("tenant", tenant)));
