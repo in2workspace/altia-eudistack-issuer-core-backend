@@ -29,6 +29,7 @@ import reactor.core.publisher.Mono;
 
 import java.util.List;
 
+import static es.in2.issuer.backend.shared.domain.util.Constants.SYSTEM_TENANT;
 import static es.in2.issuer.backend.shared.domain.util.EndpointsConstants.CREDENTIAL_CATALOG_PATH;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -70,14 +71,16 @@ class CredentialCatalogControllerTest {
 
     /**
      * Default stub for the tenant-match gate (security review, EUD-169, S1): this slice test
-     * has no {@code TenantDomainWebFilter}, so the resolved tenant defaults to {@code
-     * "unknown"} ({@code TENANT_DOMAIN_CONTEXT_KEY}'s fallback) -- matching it here keeps
-     * every pre-existing test passing without asserting anything about tenant matching.
-     * Tests that care about the mismatch override this per-test.
+     * has no {@code TenantDomainWebFilter}, so the resolved tenant defaults to {@link
+     * SYSTEM_TENANT} ({@code TENANT_DOMAIN_CONTEXT_KEY}'s fallback, L2: aligned with the same
+     * sentinel TD-5 already adopted in {@code TenantCredentialProfileServiceImpl}, replacing
+     * the ad hoc {@code "unknown"} string this controller used to fall back to) -- matching it
+     * here keeps every pre-existing test passing without asserting anything about tenant
+     * matching. Tests that care about the mismatch override this per-test.
      */
     @BeforeEach
     void stubTokenTenantMatchesDefault() {
-        when(accessTokenService.getTokenTenant(anyString())).thenReturn(Mono.just("unknown"));
+        when(accessTokenService.getTokenTenant(anyString())).thenReturn(Mono.just(SYSTEM_TENANT));
     }
 
     @Test

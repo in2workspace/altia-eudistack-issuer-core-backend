@@ -11,7 +11,11 @@ ALTER TABLE tenant_credential_profile
     ADD COLUMN IF NOT EXISTS delivery_modes VARCHAR(64);
 
 -- 2) GUARDA fail-closed (ES-08): configuración previa que NO puede trasladarse
---    sin ampliar permisos en silencio.
+--    sin ampliar permisos en silencio. Condición (a) alineada literalmente con las
+--    7 formas de la CHECK del paso 4 (M4, code-review de reverificación): antes
+--    aceptaba cualquier orden/duplicado de direct/email/ui, así que un valor legacy
+--    no canónico pasaba este guard y solo fallaba después, en el paso 4, con una
+--    violación de constraint de Postgres opaca en vez de este RAISE EXCEPTION claro.
 DO $$
 DECLARE unmigratable int;
 BEGIN
@@ -19,8 +23,10 @@ BEGIN
       FROM tenant_config c
      WHERE c.config_key LIKE 'issuer.delivery.modes.%'
        AND (
-            -- (a) valor no interpretable
-            c.config_value !~ '^(direct|email|ui)(,(direct|email|ui))*$'
+            -- (a) valor no interpretable, o interpretable pero no canónico
+            c.config_value NOT IN ('direct', 'email', 'ui',
+                                    'direct,email', 'direct,ui', 'email,ui',
+                                    'direct,email,ui')
             -- (b) catálogo vacío ⇒ "vacío = todo habilitado": no hay fila donde
             --     aterrizar y crear una invertiría la semántica del catálogo
          OR NOT EXISTS (SELECT 1 FROM tenant_credential_profile)

@@ -31,6 +31,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static es.in2.issuer.backend.shared.domain.util.Constants.SYSTEM_TENANT;
 import static es.in2.issuer.backend.shared.domain.util.Constants.TENANT_DOMAIN_CONTEXT_KEY;
 import static es.in2.issuer.backend.shared.domain.util.EndpointsConstants.CREDENTIAL_CATALOG_PATH;
 
@@ -98,7 +99,7 @@ public class CredentialCatalogController {
             @Valid @RequestBody UpdateCredentialCatalogRequest request) {
         return authorizeTenantAdminWrite(authorizationHeader)
                 .flatMap(ctx -> Mono.deferContextual(reactorCtx -> {
-                    String tenant = reactorCtx.getOrDefault(TENANT_DOMAIN_CONTEXT_KEY, "unknown");
+                    String tenant = reactorCtx.getOrDefault(TENANT_DOMAIN_CONTEXT_KEY, SYSTEM_TENANT);
                     return tenantCredentialProfileService.updateCatalog(
                                     request.enabledConfigurationIds(),
                                     parseDeliveryModes(request.deliveryModesByConfigurationId()))
@@ -128,7 +129,7 @@ public class CredentialCatalogController {
             @Valid @RequestBody UpdateDeliveryModesRequest request) {
         return authorizeTenantAdminWrite(authorizationHeader)
                 .flatMap(ctx -> Mono.deferContextual(reactorCtx -> {
-                    String tenant = reactorCtx.getOrDefault(TENANT_DOMAIN_CONTEXT_KEY, "unknown");
+                    String tenant = reactorCtx.getOrDefault(TENANT_DOMAIN_CONTEXT_KEY, SYSTEM_TENANT);
                     return tenantCredentialProfileService.updateDeliveryModes(
                                     parseDeliveryModes(request.deliveryModesByConfigurationId()))
                             .doOnSuccess(v -> auditService.auditSuccess(AUDIT_EVENT, ctx.organizationIdentifier(),
@@ -225,7 +226,7 @@ public class CredentialCatalogController {
             return Mono.just(ctx);
         }
         return Mono.deferContextual(reactorCtx -> {
-            String tenantDomain = reactorCtx.getOrDefault(TENANT_DOMAIN_CONTEXT_KEY, "unknown");
+            String tenantDomain = reactorCtx.getOrDefault(TENANT_DOMAIN_CONTEXT_KEY, SYSTEM_TENANT);
             return accessTokenService.getTokenTenant(authorizationHeader)
                     .defaultIfEmpty("")
                     .flatMap(tokenTenant -> {
@@ -243,7 +244,7 @@ public class CredentialCatalogController {
 
     private Mono<AuthorizationContext> auditDenyThenForbid(AuthorizationContext ctx, String action, String message) {
         return Mono.deferContextual(reactorCtx -> {
-            String tenant = reactorCtx.getOrDefault(TENANT_DOMAIN_CONTEXT_KEY, "unknown");
+            String tenant = reactorCtx.getOrDefault(TENANT_DOMAIN_CONTEXT_KEY, SYSTEM_TENANT);
             auditService.auditFailure(AUDIT_EVENT_AUTHZ_DENY, ctx.organizationIdentifier(), "role_not_permitted",
                     Map.of("tenant", tenant, "action", action));
             return Mono.<AuthorizationContext>error(new ResponseStatusException(HttpStatus.FORBIDDEN, message));

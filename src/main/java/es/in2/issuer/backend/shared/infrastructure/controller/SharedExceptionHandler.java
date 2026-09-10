@@ -420,13 +420,16 @@ public class SharedExceptionHandler {
         );
     }
 
+    // Security review (N1, re-verification): handleSafe, not handleWith -- ex.getMessage()
+    // embeds the caller-supplied tokenTenant/resolved-tenant values verbatim (see
+    // CredentialCatalogController.requireTenantMatch / RequireTenantMatchRule).
     @ExceptionHandler(TenantMismatchException.class)
     @ResponseStatus(HttpStatus.FORBIDDEN)
     public Mono<GlobalErrorMessage> handleTenantMismatchException(
             TenantMismatchException ex,
             ServerHttpRequest request
     ) {
-        return errors.handleWith(
+        return errors.handleSafe(
                 ex, request,
                 GlobalErrorTypes.TENANT_MISMATCH.getCode(),
                 "Tenant mismatch",

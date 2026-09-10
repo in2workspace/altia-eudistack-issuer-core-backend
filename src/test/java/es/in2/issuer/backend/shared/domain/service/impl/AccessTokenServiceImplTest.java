@@ -478,6 +478,27 @@ class AccessTokenServiceImplTest {
     }
 
     @Test
+    void testGetTokenTenant_ClaimHasLegacyEnvSuffix_isStripped() throws JsonProcessingException {
+        // M3 (re-verification): normalized the same way TenantDomainWebFilter already
+        // normalizes the resolved-tenant side, so a legacy env-suffixed claim doesn't fail
+        // requireTenantMatch's comparison on formatting alone.
+        String token = "eyJhbGciOiJIUzI1NiJ9.e30.ZRrHA1JJJW8opB1Qfp7QDl4Ig";
+        String jwtPayload = "{\"tenant\":\"sandbox-stg\",\"mandator\":{\"organizationIdentifier\":\"org-1\"}}";
+
+        try (MockedStatic<SignedJWT> mockedJwtStatic = mockStatic(SignedJWT.class)) {
+            mockedJwtStatic.when(() -> SignedJWT.parse(anyString())).thenReturn(mockSignedJwt);
+            when(mockSignedJwt.getPayload()).thenReturn(new Payload(jwtPayload));
+            when(mockObjectMapper.readTree(jwtPayload)).thenReturn(new ObjectMapper().readTree(jwtPayload));
+
+            Mono<String> result = accessTokenServiceImpl.getTokenTenant("Bearer " + token);
+
+            StepVerifier.create(result)
+                    .expectNext("sandbox")
+                    .verifyComplete();
+        }
+    }
+
+    @Test
     void testGetTokenTenant_ClaimAbsent_returnsEmpty() throws JsonProcessingException {
         String token = "eyJhbGciOiJIUzI1NiJ9.e30.ZRrHA1JJJW8opB1Qfp7QDl4Ig";
         String jwtPayload = "{\"mandator\":{\"organizationIdentifier\":\"org-1\"}}";

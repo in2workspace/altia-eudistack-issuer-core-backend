@@ -708,21 +708,27 @@ class SharedExceptionHandlerTest {
     // -------------------- handleTenantMismatchException --------------------
 
     @Test
-    void handleTenantMismatchException() {
-        var ex = new TenantMismatchException("tenant does not match");
+    void handleTenantMismatchException_neverLeaksTokenOrTenantValues() {
+        // Security review (N1): handleSafe, not handleWith -- ex.getMessage() embeds the
+        // caller-supplied tokenTenant/resolved-tenant values verbatim.
+        var ex = new TenantMismatchException("Token tenant 'acme' does not match tenant header 'sandbox'");
         var type = GlobalErrorTypes.TENANT_MISMATCH.getCode();
         var title = "Tenant mismatch";
         var st = HttpStatus.FORBIDDEN;
-        var fallback = "The token's organization does not match the requested tenant";
-        var expected = new GlobalErrorMessage(type, title, st.value(), "tenant does not match", UUID.randomUUID().toString());
+        var detail = "The token's organization does not match the requested tenant";
+        var expected = new GlobalErrorMessage(type, title, st.value(), detail, UUID.randomUUID().toString());
 
-        when(errors.handleWith(ex, request, type, title, st, fallback)).thenReturn(Mono.just(expected));
+        when(errors.handleSafe(ex, request, type, title, st, detail)).thenReturn(Mono.just(expected));
 
         StepVerifier.create(handler.handleTenantMismatchException(ex, request))
-                .assertNext(gem -> assertGem(gem, type, title, st, "tenant does not match"))
+                .assertNext(gem -> {
+                    assertGem(gem, type, title, st, detail);
+                    assertFalse(gem.detail().contains("acme"));
+                    assertFalse(gem.detail().contains("sandbox"));
+                })
                 .verifyComplete();
 
-        verify(errors).handleWith(ex, request, type, title, st, fallback);
+        verify(errors).handleSafe(ex, request, type, title, st, detail);
     }
 
     // -------------------- handlePayloadValidationException --------------------

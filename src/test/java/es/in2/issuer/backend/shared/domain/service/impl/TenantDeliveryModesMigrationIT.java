@@ -187,6 +187,25 @@ class TenantDeliveryModesMigrationIT extends PostgresIntegrationBase {
     }
 
     /**
+     * ES-08 / M4 (re-verification code-review): a legacy value made of known tokens but in a
+     * non-canonical order previously slipped past this guard (its regex only checked token
+     * vocabulary, not canonical form) and failed later instead, at the {@code CHECK} constraint
+     * added in step 4 of the same migration -- an opaque Postgres constraint violation instead
+     * of this clear {@code RAISE EXCEPTION}. The guard's condition (a) now mirrors the
+     * {@code CHECK}'s own 7-value list exactly, so this fails here, with the intended message.
+     */
+    @Test
+    void migration_failsClosedOnNonCanonicalOrderLegacyValue() {
+        String tenant = "migration-noncanonical-value";
+        String configId = configId();
+        createSchemaAndMigrateTo(tenant, "12");
+        seedEnabledProfile(tenant, configId);
+        seedLegacyDeliveryModes(tenant, configId, "ui,direct");
+
+        assertThatThrownBy(() -> migrateFully(tenant)).isInstanceOf(FlywayException.class);
+    }
+
+    /**
      * ES-08: an empty catalog (no enabled rows at all) with a legacy key present has nowhere
      * lossless to land the backfill -- "empty catalog" would otherwise mean "everything
      * enabled" under the pre-EUD-72 semantics, so the migration refuses rather than guess.
